@@ -74,8 +74,10 @@ flowchart LR
 │  Text Extraction   │ ML Kit Text Recognition v2          │
 │                    │ (On-device, ~5MB model)             │
 ├─────────────────────────────────────────────────────────┤
-│  Dark Pattern AI   │ TensorFlow Lite                     │
-│                    │ Universal Sentence Encoder (~30MB)  │
+│  Dark Pattern AI   │ **Hybrid Intelligence Engine**      │
+│  (Tiered)          │ 1. TFLite USE (Baseline - Text)     │
+│                    │ 2. Gemini Nano (Pixel/S24 - Visual) │
+│                    │ 3. Gemini Pro (Cloud - Deep Scan)   │
 ├─────────────────────────────────────────────────────────┤
 │  Local Storage     │ Room Database                       │
 │                    │ DataStore Preferences               │
@@ -312,38 +314,49 @@ class FloatingAnalyzeButton(private val context: Context) {
 
 ---
 
-### Phase 3C: Enhanced Detection (Visual Analysis)
+### Phase 3C: Enhanced Detection (Gemini Hybrid AI)
 
-Add computer vision for detecting visual dark patterns (not just text).
+Introduce advanced visual reasoning using a tiered AI approach.
 
----
+#### [NEW] [HybridDetector.kt](file:///c:/Home/Software/Google_Antigravity/CBS_App/safe-web-android/app/src/main/java/com/safeweb/ml/HybridDetector.kt)
 
-#### [NEW] [VisualPatternDetector.kt](file:///c:/Home/Software/Google_Antigravity/CBS_App/safe-web-android/app/src/main/java/com/safeweb/ml/VisualPatternDetector.kt)
-
-Detect visual dark patterns (countdown timers, fake buttons, etc.):
+Orchestrator that selects the best model based on device capabilities and user preference.
 
 ```kotlin
-class VisualPatternDetector(context: Context) {
-    // Uses TFLite object detection model trained on dark pattern UI elements
+class HybridDetector(
+    private val context: Context,
+    private val tfLiteDetector: DarkPatternDetector,
+    private val geminiNanoClient: GeminiNanoClient, // Wrapper for AICore
+    private val geminiCloudClient: GeminiCloudClient
+) {
     
-    data class VisualPattern(
-        val type: VisualPatternType,
-        val boundingBox: Rect,
-        val confidence: Float
-    )
-    
-    enum class VisualPatternType {
-        COUNTDOWN_TIMER,      // Fake urgency timers
-        FAKE_CLOSE_BUTTON,    // Disguised ads
-        HIDDEN_COST_SMALL,    // Tiny fee text
-        PRE_CHECKED_BOX,      // Pre-selected options
-        MISDIRECTION_VISUAL   // Visual tricks
+    suspend fun analyzeScreenshot(bitmap: Bitmap, mode: ScanMode): AnalysisResult {
+        // 1. Always run baseline OCR + TFLite (Fast, Private)
+        val textResults = tfLiteDetector.analyze(bitmap)
+        
+        // 2. If supported device, run Gemini Nano (Visual reasoning, Private)
+        val visualResults = if (GeminiNanoClient.isAvailable(context)) {
+            geminiNanoClient.analyzeVisuals(bitmap)
+        } else emptyList()
+        
+        // 3. If "Deep Scan" requested, run Gemini Pro (Cloud, Cloud-based)
+        val deepScanResults = if (mode == ScanMode.DEEP_SCAN) {
+             geminiCloudClient.analyze(bitmap)
+        } else emptyList()
+        
+        return mergeResults(textResults, visualResults, deepScanResults)
     }
-    
-    suspend fun detectVisualPatterns(bitmap: Bitmap): List<VisualPattern> {
-        // Run object detection model
-        // Return detected visual dark patterns
-    }
+}
+```
+
+#### [NEW] [GeminiNanoClient.kt](file:///c:/Home/Software/Google_Antigravity/CBS_App/safe-web-android/app/src/main/java/com/safeweb/ml/GeminiNanoClient.kt)
+
+Integration with Android AICore for on-device multimodal analysis.
+
+```kotlin
+// Uses Google Generative AI SDK for Android (Samsung/Pixel pre-loaded models)
+class GeminiNanoClient {
+    // Prompt: "Identify UI elements in this image designed to trick the user..."
 }
 ```
 
@@ -450,8 +463,9 @@ gantt
 | Core App | API 26 (Android 8.0) | ~95% device coverage |
 | ML Kit OCR | API 21 | On-device, no cloud |
 | TensorFlow Lite | API 21 | GPU delegate optional |
-| AccessibilityService.takeScreenshot | API 30 (Android 11) | ~70% device coverage |
-| MediaProjection (fallback) | API 21 | Requires user consent dialog |
+| Gemini Nano | **Android 14 (AICore)** | Pixel 8/9, Galaxy S24+ only |
+| Gemini Pro | API 21 | Requires Internet key |
+| AccessibilityService | API 30 (Android 11) | ~70% device coverage |
 
 ---
 
