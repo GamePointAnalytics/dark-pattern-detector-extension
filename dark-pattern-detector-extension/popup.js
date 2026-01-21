@@ -37,38 +37,51 @@ document.addEventListener('DOMContentLoaded', async () => {
             statusDiv.textContent = `${count} Dark Patterns Detected`;
             statusDiv.className = "status warning";
 
-            // Aggregate patterns by type with content
+            // Aggregate patterns by type with content and frequency
             const details = {};
             if (data.results) {
                 data.results.forEach(r => {
-                    if (!details[r.type]) details[r.type] = [];
-                    // Only add unique texts per type to avoid clutter
-                    if (!details[r.type].includes(r.text)) {
-                        details[r.type].push(r.text);
+                    if (!details[r.type]) details[r.type] = {};
+
+                    // Count occurrences of each specific text
+                    if (!details[r.type][r.text]) {
+                        details[r.type][r.text] = 1;
+                    } else {
+                        details[r.type][r.text]++;
                     }
                 });
             }
 
             // Display breakdown with Details
-            Object.entries(details).forEach(([type, texts]) => {
-                const typeCount = texts.length;
+            Object.entries(details).forEach(([type, textCounts]) => {
+                // Calculate total patterns for this type (sum of all frequencies)
+                const totalForType = Object.values(textCounts).reduce((a, b) => a + b, 0);
+
                 const detailsEl = document.createElement('details');
                 detailsEl.className = 'pattern-group';
 
-                // Summary (Header)
+                // Summary (Header) - Shows total count for this category
                 const summary = document.createElement('summary');
                 summary.innerHTML = `
                     <span>${type}</span>
-                    <span class="badge regex">${typeCount}</span>
+                    <span class="badge regex">${totalForType}</span>
                 `;
                 detailsEl.appendChild(summary);
 
-                // List of found texts
+                // List of found texts with frequency counts
                 const ul = document.createElement('ul');
                 ul.className = 'pattern-list';
-                texts.forEach(text => {
+
+                Object.entries(textCounts).forEach(([text, count]) => {
                     const li = document.createElement('li');
-                    li.textContent = `"${text}"`;
+
+                    if (count > 1) {
+                        // Show count if > 1, e.g., "Limited time (x5)"
+                        li.textContent = `"${text}" (x${count})`;
+                    } else {
+                        li.textContent = `"${text}"`;
+                    }
+
                     li.title = text; // Tooltip for full text
                     ul.appendChild(li);
                 });
