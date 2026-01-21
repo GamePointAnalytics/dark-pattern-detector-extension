@@ -1,40 +1,16 @@
 /**
- * Safe Web - Popup Script (v2.0)
+ * DarkPatternDetector - Popup Script (v2.2 - Regex Only)
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
     const scanBtn = document.getElementById('scanBtn');
     const statusDiv = document.getElementById('status');
     const patternCountSpan = document.getElementById('patternCount');
-    const avgConfidenceSpan = document.getElementById('avgConfidence');
-    const confidenceFill = document.getElementById('confidenceFill');
-    const aiToggle = document.getElementById('aiToggle');
-    const modeLabel = document.getElementById('modeLabel');
 
-    // Load saved settings
-    try {
-        const settings = await chrome.storage.local.get(['aiEnabled']);
-        aiToggle.checked = settings.aiEnabled !== false;
-        updateModeLabel();
-    } catch (e) {
-        console.log("Using default settings");
-    }
-
-    // Get current tab and request results
-    async function refreshResults() {
-        statusDiv.textContent = "Scanning...";
-        statusDiv.className = "status scanning";
-
-        try {
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-
-            const response = await chrome.tabs.sendMessage(tab.id, { action: "getResults" });
-            updateUI(response);
-        } catch (e) {
-            statusDiv.textContent = "Refresh page to activate";
-            statusDiv.className = "status";
-            console.log("Could not get results:", e);
-        }
+    // Get current tab
+    async function getCurrentTab() {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        return tab;
     }
 
     // Update UI with results
@@ -46,83 +22,106 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const count = data.count || 0;
         patternCountSpan.textContent = count;
+        const patternsList = document.getElementById('patternsList');
+        patternsList.innerHTML = '';
 
         if (count === 0) {
-            statusDiv.textContent = "✓ Page looks clean";
-            statusDiv.className = "status";
-            confidenceFill.style.width = "0%";
-            avgConfidenceSpan.textContent = "-";
+            if (data.hasScanned) {
+                statusDiv.textContent = "Page looks clean";
+                statusDiv.className = "status";
+            } else {
+                statusDiv.textContent = "Ready to Scan";
+                statusDiv.className = "status scanning";
+            }
         } else {
-            statusDiv.textContent = `⚠️ ${count} pattern${count > 1 ? 's' : ''} detected`;
+            statusDiv.textContent = `${count} Dark Patterns Detected`;
             statusDiv.className = "status warning";
 
-            // Calculate average confidence
-            if (data.results && data.results.length > 0) {
-                const avgScore = data.results.reduce((sum, r) => sum + (r.score || 0), 0) / data.results.length;
-                const avgPercent = Math.round(avgScore * 100);
-                avgConfidenceSpan.textContent = `${avgPercent}%`;
-                confidenceFill.style.width = `${avgPercent}%`;
+            // Aggregate patterns by type with content
+            const details = {};
+            if (data.results) {
+                data.results.forEach(r => {
+                    if (!details[r.type]) details[r.type] = [];
+                    // Only add unique texts per type to avoid clutter
+                    if (!details[r.type].includes(r.text)) {
+                        details[r.type].push(r.text);
+                    }
+                });
+            }
+
+            // Display breakdown with Details
+            Object.entries(details).forEach(([type, texts]) => {
+                const typeCount = texts.length;
+                const detailsEl = document.createElement('details');
+                detailsEl.className = 'pattern-group';
+
+                // Summary (Header)
+                const summary = document.createElement('summary');
+                summary.innerHTML = `
+                    <span>${type}</span>
+                    <span class="badge regex">${typeCount}</span>
+                `;
+                detailsEl.appendChild(summary);
+
+                // List of found texts
+                const ul = document.createElement('ul');
+                ul.className = 'pattern-list';
+                texts.forEach(text => {
+                    const li = document.createElement('li');
+                    li.textContent = `"${text}"`;
+                    li.title = text; // Tooltip for full text
+                    ul.appendChild(li);
+                });
+                detailsEl.appendChild(ul);
+
+                patternsList.appendChild(detailsEl);
+            });
+        }
+    }
+
+    // Listen for progress updates
+    chrome.runtime.onMessage.addListener((message) => {
+        if (message.action === "scanProgress") {
+            statusDiv.textContent = `Scanning... (${message.progress}%)`;
+            statusDiv.className = "status";
+            patternCountSpan.textContent = message.found || 0;
+        } else if (message.action === "resultsReady") {
+            updateUI(message);
+        }
+    });
+
+    // Scan button click handler
+    scanBtn.addEventListener('click', async () => {
+        const tab = await getCurrentTab();
+        if (!tab?.id) return;
+
+        statusDiv.textContent = "Scanning...";
+        statusDiv.className = "status";
+
+        try {
+            await chrome.tabs.sendMessage(tab.id, { action: "scan" });
+        } catch (e) {
+            statusDiv.textContent = "Cannot scan this page";
+            statusDiv.className = "status";
+        }
+    });
+
+    // Get initial results on popup open
+    try {
+        const tab = await getCurrentTab();
+        if (tab?.id) {
+            const response = await chrome.tabs.sendMessage(tab.id, { action: "getResults" });
+
+            if (response.isScanning) {
+                statusDiv.textContent = "Scanning..."; // Or "Scanning in progress..."
+                statusDiv.className = "status";
+                patternCountSpan.textContent = response.count || 0;
+            } else {
+                updateUI(response);
             }
         }
+    } catch (e) {
+        statusDiv.textContent = "Refresh page to scan";
+        statusDiv.className = "status";
     }
-
-    // Update mode label
-    function updateModeLabel() {
-        if (aiToggle.checked) {
-            modeLabel.textContent = "AI";
-            modeLabel.className = "badge ai";
-        } else {
-            modeLabel.textContent = "REGEX";
-            modeLabel.className = "badge regex";
-        }
-    }
-
-    // AI toggle handler
-    aiToggle.addEventListener('change', async () => {
-        updateModeLabel();
-
-        try {
-            // Save setting
-            await chrome.storage.local.set({ aiEnabled: aiToggle.checked });
-
-            // Notify content script
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            await chrome.tabs.sendMessage(tab.id, {
-                action: "setAiEnabled",
-                enabled: aiToggle.checked
-            });
-        } catch (e) {
-            console.log("Could not update setting:", e);
-        }
-    });
-
-    // Scan button handler
-    scanBtn.addEventListener('click', async () => {
-        statusDiv.textContent = "Scanning...";
-        statusDiv.className = "status scanning";
-        scanBtn.disabled = true;
-
-        try {
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-
-            const response = await chrome.tabs.sendMessage(tab.id, { action: "scan" });
-            updateUI(response);
-        } catch (e) {
-            statusDiv.textContent = "Refresh page first";
-            statusDiv.className = "status";
-            console.log("Scan failed:", e);
-        } finally {
-            scanBtn.disabled = false;
-        }
-    });
-
-    // Listen for updates from content script
-    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-        if (request.action === "resultsReady") {
-            updateUI(request);
-        }
-    });
-
-    // Initial load
-    refreshResults();
 });

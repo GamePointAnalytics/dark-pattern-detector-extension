@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Shield -->
+  <path d="M20 20 L64 8 L108 20 L108 70 Q108 100 64 118 Q20 100 20 70 Z" fill="#26A69A"/>
+  <!-- Magnifying glass circle -->
+  <circle cx="80" cy="70" r="22" fill="none" stroke="#2196F3" stroke-width="6"/>
+  <!-- Magnifying glass handle -->
+  <line x1="96" y1="86" x2="112" y2="102" stroke="#2196F3" stroke-width="8" stroke-linecap="round"/>
+</svg>

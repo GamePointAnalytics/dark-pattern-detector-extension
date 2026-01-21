@@ -2,7 +2,8 @@
 <html>
 
 <head>
-  <title>Safe Web</title>
+  <meta charset="UTF-8">
+  <title>DarkPatternDetector</title>
   <style>
     * {
       box-sizing: border-box;
@@ -180,41 +181,85 @@
       background: #e0e0e0;
       color: #666;
     }
+
+    /* Details View Styles */
+    details.pattern-group {
+      border-bottom: 1px solid #eee;
+      margin-bottom: 4px;
+    }
+
+    details.pattern-group summary {
+      cursor: pointer;
+      padding: 8px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      font-weight: 500;
+      list-style: none;
+      /* Hide default triangle in some browsers */
+    }
+
+    /* Custom triangle/arrow */
+    details.pattern-group summary::-webkit-details-marker {
+      display: none;
+    }
+
+    details.pattern-group summary::after {
+      content: '▼';
+      font-size: 10px;
+      color: #999;
+      transform: rotate(-90deg);
+      transition: transform 0.2s;
+      margin-left: 8px;
+    }
+
+    details.pattern-group[open] summary::after {
+      transform: rotate(0deg);
+    }
+
+    /* Ensure the type name is on the left and badge on the right, but before the arrow */
+    details.pattern-group summary>span:first-child {
+      flex-grow: 1;
+    }
+
+    ul.pattern-list {
+      margin: 0;
+      padding: 0 0 8px 12px;
+      list-style: none;
+    }
+
+    ul.pattern-list li {
+      font-size: 11px;
+      color: #666;
+      padding: 2px 0;
+      border-left: 2px solid #e0e0e0;
+      padding-left: 8px;
+      margin-bottom: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
   </style>
 </head>
 
 <body>
   <div class="container">
-    <h2>🛡️ Safe Web</h2>
+    <h2>DarkPatternDetector</h2>
 
     <div id="status" class="status">Scanning...</div>
 
-    <div class="confidence-bar">
-      <div id="confidenceFill" class="confidence-fill" style="width: 0%"></div>
-    </div>
-
-    <div class="toggle-row">
-      <span class="toggle-label">AI Detection</span>
-      <label class="toggle">
-        <input type="checkbox" id="aiToggle" checked>
-        <span class="slider"></span>
-      </label>
-    </div>
-
-    <button id="scanBtn">🔍 Scan Now</button>
+    <button id="scanBtn">Scan Now</button>
 
     <div class="stats">
-      <div class="stats-row">
-        <span>Patterns Found:</span>
+      <div id="patternsList"></div>
+      <div class="stats-row" style="margin-top: 12px; border-top: 1px solid #eee; padding-top: 8px;">
+        <span>Total Detected:</span>
         <span id="patternCount">0</span>
       </div>
       <div class="stats-row">
         <span>Detection Mode:</span>
-        <span id="modeLabel" class="badge ai">AI</span>
-      </div>
-      <div class="stats-row">
-        <span>Avg Confidence:</span>
-        <span id="avgConfidence">-</span>
+        <span class="badge ai">AI SANDBOX</span>
       </div>
     </div>
   </div>
