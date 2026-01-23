@@ -25,6 +25,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         const patternsList = document.getElementById('patternsList');
         patternsList.innerHTML = '';
 
+        // Update Detection Mode Badge
+        const modeBadge = document.getElementById('modeBadge');
+        if (modeBadge) {
+            if (data.mode === "Fallback Regex") {
+                modeBadge.textContent = "REGEX ONLY";
+                modeBadge.className = "badge regex";
+                modeBadge.style.background = "#e0e0e0";
+                modeBadge.style.color = "#666";
+            } else {
+                modeBadge.textContent = "AI SANDBOX";
+                modeBadge.className = "badge ai";
+                modeBadge.style.background = ""; // Reset to CSS gradient
+                modeBadge.style.color = "";
+            }
+        }
+
         if (count === 0) {
             if (data.hasScanned) {
                 statusDiv.textContent = "Page looks clean";
@@ -129,6 +145,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 statusDiv.textContent = "Scanning..."; // Or "Scanning in progress..."
                 statusDiv.className = "status";
                 patternCountSpan.textContent = response.count || 0;
+                // Update mode even while scanning if available
+                if (response.mode) {
+                    const modeBadge = document.getElementById('modeBadge');
+                    if (modeBadge && response.mode === "Fallback Regex") {
+                        modeBadge.textContent = "REGEX ONLY";
+                        modeBadge.className = "badge regex";
+                    }
+                }
             } else {
                 updateUI(response);
             }
@@ -175,6 +199,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Notify active tab
             const tab = await getCurrentTab();
             if (tab?.id) {
+                // If resuming, show scanning status immediately
+                if (!newState) { // newState is false means NOT paused -> Scanning
+                    statusDiv.textContent = "Scanning...";
+                    statusDiv.className = "status";
+                }
+
                 chrome.tabs.sendMessage(tab.id, {
                     action: "togglePause",
                     isPaused: newState

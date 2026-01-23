@@ -20,7 +20,11 @@ async function loadPatterns() {
         PATTERNS = parsePatterns(text);
         console.log(`[DarkPatternDetector] Loaded ${PATTERNS.length} categories from patterns.txt`);
     } catch (e) {
-        console.error("[DarkPatternDetector] Failed to load patterns.txt:", e);
+        if (e.message.includes('Failed to fetch') || !chrome.runtime?.id) {
+            console.log("[DarkPatternDetector] Context invalidated (Extension reloaded). Please refresh this page to resume scanning.");
+        } else {
+            console.error("[DarkPatternDetector] Failed to load patterns.txt:", e);
+        }
     }
 }
 
@@ -82,8 +86,8 @@ function createPatternObject(type, keywordList) {
     };
 }
 
-// Load patterns immediately
-loadPatterns();
+// Initialize patterns - Store promise to avoid race conditions
+const patternsLoadedPromise = loadPatterns();
 
 
 // Common benign patterns to ignore (Legalese, footers, etc.)
@@ -103,6 +107,7 @@ let detectionResults = [];
 let isScanning = false;
 let hasScanned = false;
 let isPaused = false;
+let lastScanUsedAI = false; // Tracks if AI was actually used in the last scan
 
 // Initialize Pause State
 chrome.storage.local.get(['isPaused'], (result) => {
@@ -120,12 +125,15 @@ async function scanAndHighlight() {
     isScanning = true;
     detectionResults = [];
     let found = false;
+    lastScanUsedAI = false; // Reset for this scan
 
     try {
-        // Ensure patterns are loaded before scanning
+        // Ensure patterns are fully loaded before proceeding
+        await patternsLoadedPromise;
+
         if (PATTERNS.length === 0) {
-            await loadPatterns();
-            if (PATTERNS.length === 0) return;
+            console.warn("[DarkPatternDetector] No patterns available. Scan aborted.");
+            return;
         }
 
         // First, count any already-highlighted elements from previous scans
@@ -259,7 +267,7 @@ async function scanAndHighlight() {
                             console.log(`   ❓ Result: Low Confidence / Unknown`);
                         }
                     } catch (e) {
-                        console.warn("[DarkPatternDetector] AI check failed, using regex:", e);
+                        console.log("[DarkPatternDetector] AI check timeout/failed, using regex:", e.message);
                     }
                 } else {
                     console.log("[DarkPatternDetector] AI not ready, using regex fallback");
@@ -282,6 +290,7 @@ async function scanAndHighlight() {
                     if (aiResult.score && aiResult.score > 0.6) {
                         shouldHighlight = true;
                         finalScore = aiResult.score;
+                        lastScanUsedAI = true; // Mark that AI was successfully used
                     }
                 } else {
                     // AI failed/unavailable: Fallback to STRICT Regex (High Precision)
@@ -314,6 +323,10 @@ async function scanAndHighlight() {
 
         // Notify popup of results
         try {
+            if (PATTERNS.length === 0) {
+                console.warn("[DarkPatternDetector] Scan finished with 0 results because PATTERNS list is empty/failed to load.");
+            }
+
             chrome.runtime.sendMessage({
                 action: "resultsReady",
                 count: detectionResults.length,
@@ -323,12 +336,6 @@ async function scanAndHighlight() {
         } catch (e) {
             // Popup not open
         }
-    }
-
-    if (detectionResults.length > 0) {
-        console.log(`[DarkPatternDetector] Highlighted ${detectionResults.length} dark patterns`);
-    } else {
-        console.log(`[DarkPatternDetector] No dark patterns found`);
     }
 
     return found;
@@ -377,7 +384,8 @@ function getResults() {
         count: detectionResults.length,
         results: detectionResults,
         isScanning: isScanning,
-        hasScanned: hasScanned
+        hasScanned: hasScanned,
+        mode: lastScanUsedAI ? "Hybrid AI" : "Fallback Regex"
     };
 }
 
@@ -403,8 +411,27 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 // Run scan 2 seconds after page load
-setTimeout(() => {
-    if (!isPaused) scanAndHighlight();
-}, 2000);
+// Setup MutationObserver for dynamic content (Infinite Scroll / SPA)
+let scanTimeout = null;
+const observer = new MutationObserver((mutations) => {
+    if (isPaused || isScanning) return;
+
+    // Debounce: Wait 1.5s after last DOM change to avoid performance issues
+    if (scanTimeout) clearTimeout(scanTimeout);
+    scanTimeout = setTimeout(() => {
+        console.log("[DarkPatternDetector] DOM changed (scroll/nav), triggering auto-scan...");
+        scanAndHighlight();
+    }, 750);
+});
+
+// Run observer & initial scan
+patternsLoadedPromise.then(() => {
+    if (!isPaused) {
+        // Start observing
+        observer.observe(document.body, { childList: true, subtree: true });
+        // Initial Scan
+        scanAndHighlight();
+    }
+});
 
 console.log("[DarkPatternDetector] Content script loaded (regex detection)");
