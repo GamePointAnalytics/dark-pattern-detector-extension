@@ -426,7 +426,7 @@ const observer = new MutationObserver((mutations) => {
 
 // Run observer & initial scan
 patternsLoadedPromise.then(() => {
-    if (!isPaused) {
+    if (!isPaused && document.body) {
         // Start observing
         observer.observe(document.body, { childList: true, subtree: true });
         // Initial Scan
