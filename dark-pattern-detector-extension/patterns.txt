@@ -1,0 +1,59 @@
+# Dark Pattern Keywords (Configuration)
+# Format:
+# [Category Name]
+# keyword1, keyword2, keyword3
+#
+# Note:
+# - Commas separate keywords
+# - Lines starting with # are comments
+# - \d+ means "one or more numbers"
+# - Keywords are case-insensitive by default in the app
+
+[Urgency]
+hurry, rush, act now, time.{0,5}running out, offer ends, ends soon, ends today, only \d+ left, \d+ left
+limited time, limited offer, don't miss, miss a deal, prices may, expires soon, expires today, last day
+countdown, flash sale, today only, order now
+
+[Scarcity]
+high demand, in demand, selling fast, almost gone, low stock, few left, only \d+ remaining, last chance
+while supplies, limited edition, exclusive offer, exclusive access, running low, almost sold out, selling out
+
+[Social Proof]
+\d+ people viewing, \d+ viewing, people are viewing, just purchased, recently purchased, \d+ bought
+people bought, in \d+ carts, other customers, customers also, trending now, bestseller, #1 best
+most popular, others looking, people looking
+
+[Confirmshaming]
+no thanks.{0,10}don't, no thanks.{0,10}hate, i don't want to save, don't want to save
+i prefer paying, prefer paying full, full price, skip this offer, i'll pay more
+pay more later, don't care about, i hate saving
+
+[Hidden Costs]
+service fee, processing fee, booking fee, handling fee, convenience fee, platform fee
+admin fee, delivery fee, additional charge, plus taxes, additional taxes, surcharge
+added at checkout, extra charge
+
+[Hidden Subscription]
+free trial, trial period, trial ends, cancel anytime, cancel before, auto.?renews
+subscription.{0,10}(starts|continues|begins), recurring (payment|charge|billing)
+auto.?renewal, billed monthly, billed annually, renews annually, charged after, then \$\d+
+
+[Nagging]
+you haven't, you still haven't, don't forget to, you're missing, missing out
+complete your (purchase|order|profile), your cart, items? in your cart, cart is waiting
+left in cart, come back, unfinished, trial (is )?ending, offer ending
+
+[Obstruction]
+to cancel.{0,10}call, call to cancel, cancel.{0,10}(requires|must), are you sure\??
+before you (go|leave), sorry to see you, you will lose, lose (your |access|benefits)
+lose all, delete your account, giving up, what you're giving up
+
+[Preselection]
+sign me up for, agree to receive, agree to (the )?terms, add.{0,10}(protection|insurance|warranty)
+include.{0,10}(protection|warranty), donate \$, priority shipping, subscribe to (our|the)
+opt.?in, opted in, pre.?selected
+
+[Forced Action]
+create (an )?account to, sign up to (view|continue|access), enter (your )?email to
+share (to|with \d+), download (our |the )?app to, turn on notifications
+enable (notifications|location) to, invite friends to

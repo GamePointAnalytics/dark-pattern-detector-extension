@@ -137,4 +137,49 @@ document.addEventListener('DOMContentLoaded', async () => {
         statusDiv.textContent = "Refresh page to scan";
         statusDiv.className = "status";
     }
+    // Pause button handler
+    const pauseBtn = document.getElementById('pauseBtn');
+
+    // Initialize Pause button state
+    chrome.storage.local.get(['isPaused'], (result) => {
+        updatePauseButton(result.isPaused);
+    });
+
+    function updatePauseButton(isPaused) {
+        if (isPaused) {
+            pauseBtn.textContent = "Resume Detection";
+            pauseBtn.style.background = "#4caf50"; // Green for resume
+            pauseBtn.style.color = "white";
+            statusDiv.textContent = "Detection Paused";
+            statusDiv.className = "status warning";
+            scanBtn.disabled = true;
+            scanBtn.style.opacity = "0.5";
+        } else {
+            pauseBtn.textContent = "Pause Detection";
+            pauseBtn.style.background = "#f0f0f0";
+            pauseBtn.style.color = "#333";
+            scanBtn.disabled = false;
+            scanBtn.style.opacity = "1";
+        }
+    }
+
+    pauseBtn.addEventListener('click', async () => {
+        // Toggle state
+        chrome.storage.local.get(['isPaused'], async (result) => {
+            const newState = !result.isPaused;
+
+            // Save state
+            await chrome.storage.local.set({ isPaused: newState });
+            updatePauseButton(newState);
+
+            // Notify active tab
+            const tab = await getCurrentTab();
+            if (tab?.id) {
+                chrome.tabs.sendMessage(tab.id, {
+                    action: "togglePause",
+                    isPaused: newState
+                });
+            }
+        });
+    });
 });

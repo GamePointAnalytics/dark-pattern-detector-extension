@@ -26,6 +26,21 @@
       "sandbox.html"
     ]
   },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "images/*.png",
+        "lib/tf.min.js",
+        "lib/use.min.js",
+        "sandbox.html",
+        "sandbox.js",
+        "patterns.txt"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
   "content_scripts": [
     {
       "matches": [

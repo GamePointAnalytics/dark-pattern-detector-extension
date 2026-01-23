@@ -8,68 +8,82 @@
 // Dark Pattern Keywords (Regex) - 10 categories
 // broadRegex: Phrase-context patterns to catch candidates for AI verification
 // strictRegex: High-precision fallback if AI fails
-const PATTERNS = [
-    {
-        type: "Urgency",
-        broadRegex: /\b(hurry|rush|act now|time.{0,5}running out|offer ends|ends soon|ends today|only \d+ left|\d+ left|limited time|limited offer|don't miss|miss a deal|prices may|expires soon|expires today|last day|countdown|flash sale|today only|order now)\b/gi,
-        strictRegex: /\b(hurry|rush|act now|time is running out|offer ends in|only \d+ left|limited time|don't miss|miss a deal|prices may go up|expires|ends soon|last day|countdown|flash sale|today only)\b/gi,
-        message: "Creates false urgency to rush your decision."
-    },
-    {
-        type: "Scarcity",
-        broadRegex: /\b(high demand|in demand|selling fast|almost gone|low stock|few left|only \d+ remaining|last chance|while supplies|limited edition|exclusive offer|exclusive access|running low|almost sold out|selling out)\b/gi,
-        strictRegex: /\b(high demand|in high demand|reserved for|selling fast|almost gone|low stock|few left|last chance|while supplies last|limited edition|exclusive|running low|almost sold out)\b/gi,
-        message: "Suggests scarcity to trigger FOMO."
-    },
-    {
-        type: "Social Proof",
-        broadRegex: /\b(\d+ people viewing|\d+ viewing|people are viewing|just purchased|recently purchased|\d+ bought|people bought|in \d+ carts|other customers|customers also|trending now|bestseller|#1 best|most popular|others looking|people looking)\b/gi,
-        strictRegex: /\b(\d+ people are viewing|\d+ people viewing|purchased by \d+ people|in \d+ carts|\d+ customers|trending|bestseller|most popular|people bought|people looking)\b/gi,
-        message: "Uses social pressure to influence you."
-    },
-    {
-        type: "Confirmshaming",
-        broadRegex: /\b(no thanks.{0,10}don't|no thanks.{0,10}hate|i don't want to save|don't want to save|i prefer paying|prefer paying full|full price|skip this offer|i'll pay more|pay more later|don't care about|i hate saving)\b/gi,
-        strictRegex: /\b(no thanks, i don't want|i prefer paying full price|i don't want to save|i hate saving|continue without|skip this offer|i'll pay more|i don't care about)\b/gi,
-        message: "Guilts you by shaming the decline option."
-    },
-    {
-        type: "Hidden Costs",
-        broadRegex: /\b(service fee|processing fee|booking fee|handling fee|convenience fee|platform fee|admin fee|delivery fee|additional charge|plus taxes|additional taxes|surcharge|added at checkout|extra charge)\b/gi,
-        strictRegex: /\b(service fee|processing fee|handling charge|convenience fee|booking fee|additional taxes|platform fee|admin fee|delivery surcharge|added at checkout)\b/gi,
-        message: "Reveals unexpected charges late."
-    },
-    {
-        type: "Hidden Subscription",
-        broadRegex: /\b(free trial|trial period|trial ends|cancel anytime|cancel before|auto.?renews|subscription.{0,10}(starts|continues|begins)|recurring (payment|charge|billing)|auto.?renewal|billed monthly|billed annually|renews annually|charged after|then \$\d+)\b/gi,
-        strictRegex: /\b(free trial.{0,20}then|cancel anytime after|automatically renews|subscription continues|recurring.{0,10}charges|auto-renewal|charged after trial|renews annually|billed monthly until)\b/gi,
-        message: "Obscures recurring payment terms."
-    },
-    {
-        type: "Nagging",
-        broadRegex: /\b(you haven't|you still haven't|don't forget to|you're missing|missing out|complete your (purchase|order|profile)|your cart|items? in your cart|cart is waiting|left in cart|come back|unfinished|trial (is )?ending|offer ending)\b/gi,
-        strictRegex: /\b(you still haven't|don't forget to|you're missing out|complete your purchase|left items in your cart|cart is waiting|come back and|unfinished business|trial is ending)\b/gi,
-        message: "Persistently interrupts to pressure you."
-    },
-    {
-        type: "Obstruction",
-        broadRegex: /\b(to cancel.{0,10}call|call to cancel|cancel.{0,10}(requires|must)|are you sure\??|before you (go|leave)|sorry to see you|you will lose|lose (your |access|benefits)|lose all|delete your account|giving up|what you're giving up)\b/gi,
-        strictRegex: /\b(to cancel.{0,20}call|cancellation requires|are you sure\?|before you go|sorry to see you leave|lose.{0,10}benefits|cancelling will delete|what you're giving up|lose access)\b/gi,
-        message: "Makes it difficult to cancel or leave."
-    },
-    {
-        type: "Preselection",
-        broadRegex: /\b(sign me up for|agree to receive|agree to (the )?terms|add.{0,10}(protection|insurance|warranty)|include.{0,10}(protection|warranty)|donate \$|priority shipping|subscribe to (our|the)|opt.?in|opted in|pre.?selected)\b/gi,
-        strictRegex: /\b(sign me up for|agree to receive|add.{0,10}for \$|include.{0,10}warranty|donate \$|priority shipping|subscribe to our|opt-in to partner)\b/gi,
-        message: "Pre-checks boxes that favor the business."
-    },
-    {
-        type: "Forced Action",
-        broadRegex: /\b(create (an )?account to|sign up to (view|continue|access)|enter (your )?email to|share (to|with \d+)|download (our |the )?app to|turn on notifications|enable (notifications|location) to|invite friends to)\b/gi,
-        strictRegex: /\b(create an account to|sign up to view|enter your email to|share with \d+ friends|download our app to|turn on notifications to|enable location to|invite friends to get)\b/gi,
-        message: "Requires unrelated actions to proceed."
+// Dark Pattern Keywords (Regex) - 10 categories
+let PATTERNS = []; // Loaded dynamically from patterns.txt
+
+// Initialize patterns
+async function loadPatterns() {
+    try {
+        const url = chrome.runtime.getURL('patterns.txt');
+        const response = await fetch(url);
+        const text = await response.text();
+        PATTERNS = parsePatterns(text);
+        console.log(`[DarkPatternDetector] Loaded ${PATTERNS.length} categories from patterns.txt`);
+    } catch (e) {
+        console.error("[DarkPatternDetector] Failed to load patterns.txt:", e);
     }
-];
+}
+
+// Parse the text file format
+function parsePatterns(text) {
+    const lines = text.split('\n');
+    const categories = [];
+    let currentCategory = null;
+    let keywords = [];
+
+    lines.forEach(line => {
+        line = line.trim();
+        if (!line || line.startsWith('#')) return; // Skip comments/empty
+
+        // Check for [Category Name]
+        const categoryMatch = line.match(/^\[(.*)\]$/);
+        if (categoryMatch) {
+            // Save previous category
+            if (currentCategory) {
+                categories.push(createPatternObject(currentCategory, keywords));
+            }
+            currentCategory = categoryMatch[1];
+            keywords = [];
+        } else {
+            // Add keywords (split by comma)
+            const parts = line.split(',').map(p => p.trim()).filter(p => p.length > 0);
+            keywords.push(...parts);
+        }
+    });
+
+    // Save last category
+    if (currentCategory) {
+        categories.push(createPatternObject(currentCategory, keywords));
+    }
+
+    return categories;
+}
+
+// Helper to build the regex object
+function createPatternObject(type, keywordList) {
+    // Join all keywords with OR logic: (keyword1|keyword2|...)
+    // We escape special chars EXCEPT keys like \d, ., ?, *, +, (, ), | which are needed for regex logic
+    // Since user inputs raw regex fragments in text file (e.g. \d+), we generally TRUST their input.
+    // Ideally we'd have a flag for "isRegex", but for simplicity here we assume fragments are valid regex parts.
+
+    const broadPattern = `\\b(${keywordList.join('|')})\\b`;
+
+    // For now, Strict Regex is just a stricter subset (or same) since we lost the manual separation in text file.
+    // In a sophisticated text format, we could have [Urgency-Strict]. 
+    // For now, we reuse the same regex for strictly matching or rely on AI confidence.
+
+    return {
+        type: type,
+        broadRegex: new RegExp(broadPattern, 'gi'),
+        // Strict fallback is same as broad for now in this simple text format
+        // This relies more heavily on AI for refinement
+        strictRegex: new RegExp(broadPattern, 'gi'),
+        message: `Potential ${type} pattern detected.`
+    };
+}
+
+// Load patterns immediately
+loadPatterns();
 
 
 // Common benign patterns to ignore (Legalese, footers, etc.)
@@ -88,174 +102,227 @@ const IGNORED_PATTERNS = [
 let detectionResults = [];
 let isScanning = false;
 let hasScanned = false;
+let isPaused = false;
+
+// Initialize Pause State
+chrome.storage.local.get(['isPaused'], (result) => {
+    isPaused = result.isPaused || false;
+});
 
 /**
  * Main scanning function
  */
+// Helper for AI timeout
+const timeoutPromise = (ms) => new Promise((resolve) => setTimeout(() => resolve(null), ms));
+
 async function scanAndHighlight() {
     if (isScanning) return;
     isScanning = true;
     detectionResults = [];
     let found = false;
 
-    // First, count any already-highlighted elements from previous scans
-    const existingHighlights = document.querySelectorAll('.safe-web-highlight');
-    existingHighlights.forEach(el => {
-        detectionResults.push({
-            type: el.dataset.safeWebType || "Unknown",
-            text: el.textContent.substring(0, 50)
+    try {
+        // Ensure patterns are loaded before scanning
+        if (PATTERNS.length === 0) {
+            await loadPatterns();
+            if (PATTERNS.length === 0) return;
+        }
+
+        // First, count any already-highlighted elements from previous scans
+        const existingHighlights = document.querySelectorAll('.safe-web-highlight');
+        existingHighlights.forEach(el => {
+            detectionResults.push({
+                type: el.dataset.safeWebType || "Unknown",
+                text: el.textContent.substring(0, 50)
+            });
         });
-    });
 
-    // Collect all text nodes that match regex patterns
-    // Collect all text nodes that match regex patterns
-    const candidates = [];
+        // Collect all text nodes that match regex patterns
+        // Collect all text nodes that match regex patterns
+        const candidates = [];
 
-    function isVisible(element) {
-        if (!element) return false;
+        function isVisible(element) {
+            if (!element) return false;
 
-        // Fast checks
-        if (element.offsetParent === null && element.style.position !== 'fixed') return false; // Hidden (display: none)
+            // Fast checks
+            if (element.offsetParent === null && element.style.position !== 'fixed') return false; // Hidden (display: none)
 
-        // Detailed style checks
-        const style = window.getComputedStyle(element);
-        if (style.display === 'none') return false;
-        if (style.visibility === 'hidden') return false;
-        if (style.opacity === '0') return false;
+            // Detailed style checks
+            const style = window.getComputedStyle(element);
+            if (style.display === 'none') return false;
+            if (style.visibility === 'hidden') return false;
+            if (style.opacity === '0') return false;
 
-        // Size check (skip 1x1 tracking pixels etc)
-        const rect = element.getBoundingClientRect();
-        if (rect.width < 5 || rect.height < 5) return false;
+            // Size check (skip 1x1 tracking pixels etc)
+            const rect = element.getBoundingClientRect();
+            if (rect.width < 5 || rect.height < 5) return false;
 
-        return true;
-    }
+            return true;
+        }
 
-    function findCandidates(node) {
-        if (node.nodeType === 3) { // Text node
-            const parent = node.parentNode;
-            if (parent && (parent.tagName === 'SCRIPT' || parent.tagName === 'STYLE' ||
-                parent.tagName === 'NOSCRIPT' || parent.classList?.contains('safe-web-highlight'))) {
-                return;
+        function findCandidates(node) {
+            if (node.nodeType === 3) { // Text node
+                const parent = node.parentNode;
+                if (parent && (parent.tagName === 'SCRIPT' || parent.tagName === 'STYLE' ||
+                    parent.tagName === 'NOSCRIPT' || parent.classList?.contains('safe-web-highlight'))) {
+                    return;
+                }
+
+                // Text content check
+                const content = node.nodeValue;
+                if (!content || content.trim().length < 3) return;
+
+                // Visibility check: Only scan what the user can see
+                if (!isVisible(parent)) return;
+
+                // Check if content matches any ignore patterns
+                for (const ignorePattern of IGNORED_PATTERNS) {
+                    if (ignorePattern.test(content)) return;
+                }
+
+                PATTERNS.forEach(pattern => {
+                    // Use BROAD regex to find ANY potential candidate for the AI
+                    pattern.broadRegex.lastIndex = 0;
+                    if (pattern.broadRegex.test(content)) {
+                        // Start with the text node content
+                        let context = content;
+
+                        // Try to get surrounding context from parent (up to 300 chars)
+                        // This helps the AI understand "annual event" vs "billed annually"
+                        if (parent && parent.innerText) {
+                            context = parent.innerText;
+                            // Collapse whitespace
+                            context = context.replace(/\s+/g, ' ').trim();
+                            // Truncate if too long to prevent performance issues
+                            if (context.length > 300) {
+                                context = context.substring(0, 300) + "...";
+                            }
+                        }
+
+                        candidates.push({
+                            node: node,
+                            content: content,
+                            context: context,
+                            pattern: pattern
+                        });
+                    }
+                });
+            } else if (node.nodeType === 1 && node.childNodes &&
+                !['SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME', 'SVG', 'IMG'].includes(node.tagName)) {
+                // Basic optimization: Don't traverse into obviously hidden containers
+                // (Limited depth check could be added here for performance)
+                Array.from(node.childNodes).forEach(child => findCandidates(child));
             }
+        }
 
-            // Text content check
-            const content = node.nodeValue;
-            if (!content || content.trim().length < 3) return;
+        findCandidates(document.body);
+        console.log(`[DarkPatternDetector] Found ${candidates.length} new candidates, ${existingHighlights.length} existing`);
 
-            // Visibility check: Only scan what the user can see
-            if (!isVisible(parent)) return;
+        // Process candidates in batches to avoid overloading the sandbox (prevent timeouts)
+        const BATCH_SIZE = 3;
+        const results = [];
 
-            // Check if content matches any ignore patterns
-            for (const ignorePattern of IGNORED_PATTERNS) {
-                if (ignorePattern.test(content)) return;
-            }
+        for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
+            // Send progress update
+            try {
+                chrome.runtime.sendMessage({
+                    action: "scanProgress",
+                    progress: Math.round((i / candidates.length) * 100),
+                    found: detectionResults.length + existingHighlights.length
+                });
+            } catch (e) { /* Popup closed */ }
 
-            PATTERNS.forEach(pattern => {
-                // Use BROAD regex to find ANY potential candidate for the AI
-                pattern.broadRegex.lastIndex = 0;
-                if (pattern.broadRegex.test(content)) {
-                    candidates.push({
-                        node: node,
-                        content: content,
-                        pattern: pattern
+            const batch = candidates.slice(i, i + BATCH_SIZE);
+            const batchPromises = batch.map(async (candidate) => {
+                let aiResult = null;
+
+                // Try AI prediction if available
+                if (window.SafeWebAI && window.SafeWebAI.isReady) {
+                    try {
+                        // Log the exact context being sent to AI
+                        console.log(`%c[DarkPatternDetector] 🤖 AI Request:`, "color: #667eea; font-weight: bold;");
+                        console.log(`   📝 Context: "${candidate.context}"`);
+                        console.log(`   🔑 Matched: "${candidate.content}"`);
+
+                        // Race against timeout (5 seconds)
+                        aiResult = await Promise.race([
+                            window.SafeWebAI.predictDarkPattern(candidate.context),
+                            timeoutPromise(5000)
+                        ]);
+
+                        if (!aiResult) throw new Error("AI Timeout");
+
+                        if (aiResult && aiResult.score) {
+                            const style = aiResult.score > 0.6 ? "color: #e53e3e; font-weight: bold;" : "color: #38a169;";
+                            console.log(`   🎯 Result: %c${aiResult.type} (${(aiResult.score * 100).toFixed(1)}%)`, style);
+                        } else {
+                            console.log(`   ❓ Result: Low Confidence / Unknown`);
+                        }
+                    } catch (e) {
+                        console.warn("[DarkPatternDetector] AI check failed, using regex:", e);
+                    }
+                } else {
+                    console.log("[DarkPatternDetector] AI not ready, using regex fallback");
+                }
+
+                return { candidate, aiResult };
+            });
+
+            // Wait for current batch to finish before starting next
+            const batchResults = await Promise.all(batchPromises);
+            results.push(...batchResults);
+
+            // Update results immediately for found items in this batch
+            for (const { candidate, aiResult } of batchResults) {
+                let shouldHighlight = false;
+                let finalScore = "Regex";
+
+                if (aiResult && !aiResult.fallback && !aiResult.error) {
+                    // AI is working: Trust the AI score (Broad Match + AI Verification)
+                    if (aiResult.score && aiResult.score > 0.6) {
+                        shouldHighlight = true;
+                        finalScore = aiResult.score;
+                    }
+                } else {
+                    // AI failed/unavailable: Fallback to STRICT Regex (High Precision)
+                    // We re-check the content against the STRICT regex to avoid false positives
+                    candidate.pattern.strictRegex.lastIndex = 0;
+                    if (candidate.pattern.strictRegex.test(candidate.content)) {
+                        shouldHighlight = true;
+                        finalScore = "Regex Fallback";
+                    }
+                }
+
+                if (shouldHighlight) {
+                    highlightTextNode(candidate.node, candidate.pattern, aiResult);
+                    found = true;
+                    detectionResults.push({
+                        type: candidate.pattern.type,
+                        text: candidate.content.substring(0, 50),
+                        aiScore: finalScore
                     });
                 }
-            });
-        } else if (node.nodeType === 1 && node.childNodes &&
-            !['SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME', 'SVG', 'IMG'].includes(node.tagName)) {
-            // Basic optimization: Don't traverse into obviously hidden containers
-            // (Limited depth check could be added here for performance)
-            Array.from(node.childNodes).forEach(child => findCandidates(child));
+            }
         }
-    }
 
-    findCandidates(document.body);
-    console.log(`[DarkPatternDetector] Found ${candidates.length} new candidates, ${existingHighlights.length} existing`);
+        return found;
+    } catch (err) {
+        console.error("[DarkPatternDetector] Scan error:", err);
+    } finally {
+        isScanning = false;
+        hasScanned = true;
 
-    // Process candidates in batches to avoid overloading the sandbox (prevent timeouts)
-    const BATCH_SIZE = 3;
-    const results = [];
-
-    for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
-        // Send progress update
+        // Notify popup of results
         try {
             chrome.runtime.sendMessage({
-                action: "scanProgress",
-                progress: Math.round((i / candidates.length) * 100),
-                found: detectionResults.length + existingHighlights.length
+                action: "resultsReady",
+                count: detectionResults.length,
+                results: detectionResults,
+                hasScanned: true
             });
-        } catch (e) { /* Popup closed */ }
-
-        const batch = candidates.slice(i, i + BATCH_SIZE);
-        const batchPromises = batch.map(async (candidate) => {
-            let aiResult = null;
-
-            // Try AI prediction if available
-            if (window.SafeWebAI && window.SafeWebAI.isReady) {
-                try {
-                    // console.log(`[DarkPatternDetector] Checking with AI: "${candidate.content.substring(0, 50)}..."`);
-                    aiResult = await window.SafeWebAI.predictDarkPattern(candidate.content);
-                    // console.log(`[DarkPatternDetector] AI result:`, aiResult);
-                } catch (e) {
-                    console.warn("[DarkPatternDetector] AI check failed, using regex:", e);
-                }
-            } else {
-                console.log("[DarkPatternDetector] AI not ready, using regex fallback");
-            }
-
-            return { candidate, aiResult };
-        });
-
-        // Wait for current batch to finish before starting next
-        const batchResults = await Promise.all(batchPromises);
-        results.push(...batchResults);
-
-        // Update results immediately for found items in this batch
-        for (const { candidate, aiResult } of batchResults) {
-            let shouldHighlight = false;
-            let finalScore = "Regex";
-
-            if (aiResult && !aiResult.fallback && !aiResult.error) {
-                // AI is working: Trust the AI score (Broad Match + AI Verification)
-                if (aiResult.score && aiResult.score > 0.6) {
-                    shouldHighlight = true;
-                    finalScore = aiResult.score;
-                }
-            } else {
-                // AI failed/unavailable: Fallback to STRICT Regex (High Precision)
-                // We re-check the content against the STRICT regex to avoid false positives
-                candidate.pattern.strictRegex.lastIndex = 0;
-                if (candidate.pattern.strictRegex.test(candidate.content)) {
-                    shouldHighlight = true;
-                    finalScore = "Regex Fallback";
-                }
-            }
-
-            if (shouldHighlight) {
-                highlightTextNode(candidate.node, candidate.pattern, aiResult);
-                found = true;
-                detectionResults.push({
-                    type: candidate.pattern.type,
-                    text: candidate.content.substring(0, 50),
-                    aiScore: finalScore
-                });
-            }
+        } catch (e) {
+            // Popup not open
         }
-    }
-
-    isScanning = false;
-    hasScanned = true;
-
-    // Notify popup of results
-    try {
-        chrome.runtime.sendMessage({
-            action: "resultsReady",
-            count: detectionResults.length,
-            results: detectionResults,
-            hasScanned: true
-        });
-    } catch (e) {
-        // Popup not open
     }
 
     if (detectionResults.length > 0) {
@@ -314,19 +381,30 @@ function getResults() {
     };
 }
 
-// Message listener
+// Listen for messages from Popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "scan") {
-        scanAndHighlight();
+        if (!isPaused) {
+            scanAndHighlight();
+        } else {
+            alert("Detection is paused. Click 'Resume Detection' in the extension popup to scan.");
+        }
         sendResponse({ isScanning: true }); // Return immediately
         return false;
-    }
-    if (request.action === "getResults") {
+    } else if (request.action === "getResults") {
         sendResponse(getResults());
+    } else if (request.action === "togglePause") {
+        isPaused = request.isPaused;
+        if (!isPaused) {
+            // Auto-resume scan if unpaused
+            scanAndHighlight();
+        }
     }
 });
 
 // Run scan 2 seconds after page load
-setTimeout(scanAndHighlight, 2000);
+setTimeout(() => {
+    if (!isPaused) scanAndHighlight();
+}, 2000);
 
 console.log("[DarkPatternDetector] Content script loaded (regex detection)");
