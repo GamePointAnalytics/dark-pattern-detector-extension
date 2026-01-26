@@ -1,4 +1,4 @@
-# Dark Pattern Detector Extension
+# Dark Pattern Detector Chrome Extension
 
 ## 1. Purpose
 The Dark Pattern Detector is a Chrome extension designed to help users navigate the web safely by identifying and highlighting deceptive design patterns (dark patterns) in real-time. It serves as a web-based prototype for a future mobile application.
