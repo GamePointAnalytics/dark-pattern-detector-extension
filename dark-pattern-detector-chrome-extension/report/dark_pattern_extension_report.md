@@ -22,9 +22,9 @@ It employs a Hybrid Detection Engine that combines:
 1.  **Clone the Repository**:
     Download the project source code to your local machine.
     ```bash
-    git clone https://github.com/GamePointAnalytics/dark-pattern-detector-extension.git
+    git clone https://github.com/GamePointAnalytics/dark-pattern-detector.git
     ```
-    Or download the zip file from the repository (https://github.com/GamePointAnalytics/dark-pattern-detector-extension/raw/main/dark-pattern-detector-chrome-extension/zip/DarkPatternDetectorExtension.zip) and extract it to your local machine.
+    Or download the zip file from the repository (https://github.com/GamePointAnalytics/dark-pattern-detector/raw/main/dark-pattern-detector-chrome-extension/zip/DarkPatternDetectorExtension.zip) and extract it to your local machine.
 2.  **Open Extensions Management**:
     Open Google Chrome and navigate to `chrome://extensions/` in the address bar.
 3.  **Enable Developer Mode**:
@@ -32,7 +32,7 @@ It employs a Hybrid Detection Engine that combines:
 4.  **Load Unpacked Extension**:
     Click the **Load unpacked** button that appears in the top left.
 5.  **Select Folder**:
-    Browse to and select the `dark-pattern-detector-extension` folder from the cloned repository.
+    Browse to and select the `dark-pattern-detector-chrome-extension` folder from the cloned repository.
 6.  **Confirmation**:
     The extension should now appear in your list of installed extensions and be active.
 
