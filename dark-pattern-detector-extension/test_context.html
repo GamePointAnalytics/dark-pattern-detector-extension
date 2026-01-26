@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>AI Context Analysis Test</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .test-case {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+
+        h3 {
+            margin-top: 0;
+        }
+
+        .highlight-candidate {
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>AI Context Test Page</h1>
+    <p>Open the Chrome Console (F12) to see the logs: <code>[DarkPatternDetector] Checking context with AI...</code></p>
+
+    <!-- Case 1: Benign Context (Should ideally NOT be flagged, or have low confidence) -->
+    <div class="test-case">
+        <h3>Case 1: Benign Context</h3>
+        <p>We specialize in <b>selling fast</b> sports cars to enthusiasts around the world.</p>
+        <small><i>Regex matches "selling fast", but context is about "cars".</i></small>
+    </div>
+
+    <!-- Case 2: Malicious Context (Should be flagged) -->
+    <div class="test-case">
+        <h3>Case 2: Dark Pattern Context</h3>
+        <p>Hurry! This item is <b>selling fast</b> and will be gone soon!</p>
+        <small><i>Regex matches "selling fast", context implies scarcity/FOMO.</i></small>
+    </div>
+
+    <!-- Case 3: Ambiguous "Limited" -->
+    <div class="test-case">
+        <h3>Case 3: Benign "Limited"</h3>
+        <p>Our company is a <b>limited</b> liability partnership.</p>
+        <small><i>Regex matches "limited", context is legal structure.</i></small>
+    </div>
+
+    <!-- Case 4: Malicious "Limited" -->
+    <div class="test-case">
+        <h3>Case 4: Dark Pattern "Limited"</h3>
+        <p>This is a <b>limited</b> time offer that expires in 10 minutes!</p>
+        <small><i>Regex matches "limited", context is urgency.</i></small>
+    </div>
+
+</body>
+
+</html>
