@@ -18,7 +18,16 @@ It employs a Hybrid Detection Engine that combines:
 *   **AI Sandbox**: The AI runs in an isolated sandbox for security, which adds a small communication overhead compared to running directly in the main context.
 *   **Interpretation Accuracy**: The system may interpret benign language or user interface elements as dark patterns (false positives) in ambiguous contexts.
 
-## 3. How to install
+## 3. Privacy & AI Architecture
+**Local Processing**
+The "thinking" (inference) happens 100% on your computer's processor (CPU/GPU) inside the Chrome browser.
+*   **Privacy**: The text from the websites you visit is **never** sent to a cloud server for analysis. It stays in your browser's "Sandbox".
+*   **Offline Capability**: The code to run the AI is bundled in your extension.
+
+**Model Weights**
+While the engine code (`tf.min.js`) is included in your extension, the **Model Weights** (the actual "brain" data, ~30MB) are fetched from Google's servers (TFHub) the first time you run the extension.
+
+## 4. How to install
 1.  **Clone the Repository**:
     Download the project source code to your local machine.
     ```bash
@@ -36,7 +45,7 @@ It employs a Hybrid Detection Engine that combines:
 6.  **Confirmation**:
     The extension should now appear in your list of installed extensions and be active.
 
-## 4. How to use
+## 5. How to use
 1.  **Browse Normally**:
     Visit any website, particularly e-commerce sites where dark patterns are common. The extension automatically scans the page 2 seconds after it loads.
 2.  **Visual Indicators**:
