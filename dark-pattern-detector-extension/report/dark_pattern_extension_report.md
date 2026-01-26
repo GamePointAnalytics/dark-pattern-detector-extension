@@ -16,6 +16,7 @@ It employs a Hybrid Detection Engine that combines:
 *   **Desktop Only**: As a Chrome extension, it currently runs only on desktop versions of the Chrome browser, not on mobile devices (though it prototypes mobile app logic).
 *   **Performance**: While optimized, heavy pages with massive amounts of text might experience slight delays during the initial scan.
 *   **AI Sandbox**: The AI runs in an isolated sandbox for security, which adds a small communication overhead compared to running directly in the main context.
+*   **Interpretation Accuracy**: As an automated tool, the system may occasionally interpret benign marketing language or standard user interface elements as manipulative (false positives), particularly in ambiguous contexts.
 
 ## 3. How to install
 1.  **Clone the Repository**:
