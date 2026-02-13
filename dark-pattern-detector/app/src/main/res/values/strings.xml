@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Dark Pattern Detector</string>
+    <string name="home_title">Dark Pattern Detector</string>
+    <string name="home_subtitle">Detect manipulative design patterns in screenshots</string>
+    <string name="home_instruction_1">1. Take a screenshot of a suspicious app or website</string>
+    <string name="home_instruction_2">2. Tap Share \u2192 choose Dark Pattern Detector</string>
+    <string name="home_instruction_3">3. View the analysis results</string>
+    <string name="import_gallery">Import from Gallery</string>
+    <string name="analyzing">Analyzing screenshot\u2026</string>
+    <string name="no_patterns_found">No dark patterns found \u2713</string>
+    <string name="patterns_found">%d dark pattern(s) detected</string>
+    <string name="done">Done</string>
+    <string name="confidence">Confidence</string>
+    <string name="ai_powered">AI-Powered · 100%% On-Device</string>
+    <string name="privacy_badge">\uD83D\uDD12 No data leaves your device</string>
+    <string name="model_loading">Loading AI model…</string>
+    <string name="model_unavailable">AI model unavailable — using text fallback</string>
+    <string name="share_error">Could not load shared image</string>
+</resources>
