@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Gemini Nano Capability Test</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        #log {
+            background: #f8f9fa;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Gemini Nano (`window.LanguageModel`) Test</h1>
+
+    <div id="status" class="status warning">Checking capabilities...</div>
+
+    <div>
+        <button id="btnText" disabled>Test Text Prompt</button>
+        <button id="btnImage" disabled>Test Multimodal (Image)</button>
+    </div>
+
+    <h3>Log:</h3>
+    <div id="log"></div>
+
+    <script>
+        const logDiv = document.getElementById('log');
+        const statusDiv = document.getElementById('status');
+        const btnText = document.getElementById('btnText');
+        const btnImage = document.getElementById('btnImage');
+
+        function log(msg) {
+            logDiv.textContent += msg + '\n';
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(msg);
+        }
+
+        // Current Chrome built-in AI: window.LanguageModel (the Prompt API).
+        // Availability returns one of: 'available' | 'downloadable' | 'downloading' | 'unavailable'.
+        async function checkAvailability() {
+            log("\n--- Checking Environment ---");
+            log(`window.isSecureContext: ${window.isSecureContext}`);
+            log(`typeof window.LanguageModel: ${typeof window.LanguageModel}`);
+
+            if (typeof window.LanguageModel === 'undefined') {
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = '❌ <strong>window.LanguageModel not found</strong><br>' +
+                    'Enable chrome://flags/#optimization-guide-on-device-model and ' +
+                    'chrome://flags/#prompt-api-for-gemini-nano, then relaunch Chrome.';
+                return;
+            }
+
+            try {
+                const availability = await window.LanguageModel.availability();
+                log(`Availability: ${availability}`);
+
+                if (availability === 'unavailable') {
+                    statusDiv.className = 'status error';
+                    statusDiv.innerHTML = '❌ <strong>Gemini Nano unavailable</strong> on this device/session.';
+                    return;
+                }
+
+                if (availability === 'available') {
+                    statusDiv.className = 'status success';
+                    statusDiv.innerHTML = '✅ <strong>Gemini Nano is READY!</strong>';
+                    btnText.disabled = false;
+                } else {
+                    // 'downloadable' or 'downloading' — a session can still be created,
+                    // which triggers the download (requires user activation).
+                    statusDiv.className = 'status warning';
+                    statusDiv.innerHTML = '⏳ <strong>Gemini Nano needs a download.</strong> Click "Test Text Prompt" to start it.';
+                    btnText.disabled = false;
+                }
+            } catch (e) {
+                log(`Error checking availability: ${e.message}`);
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = '❌ Availability check failed: ' + e.message;
+            }
+        }
+
+        async function testText() {
+            log("\n--- Manual Prompt Test ---");
+
+            if (typeof window.LanguageModel === 'undefined') {
+                log("❌ window.LanguageModel not available.");
+                return;
+            }
+
+            try {
+                log("Creating session...");
+                const session = await window.LanguageModel.create({
+                    systemPrompt: "You are a friendly assistant.",
+                    monitor(m) {
+                        m.addEventListener('downloadprogress', (e) => {
+                            log(`Download: ${Math.round((e.loaded || 0) * 100)}%`);
+                        });
+                    }
+                });
+                log("Session created. Prompting...");
+
+                const result = await session.prompt("Say hello in one sentence.");
+                log(`✅ RESPONSE: ${result}`);
+                statusDiv.className = 'status success';
+                statusDiv.innerHTML = '✅ <strong>Prompt succeeded.</strong>';
+            } catch (e) {
+                log(`❌ Prompt Failed: ${e.message}`);
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = '❌ Prompt failed: ' + e.message;
+            }
+        }
+
+        async function testImage() {
+            alert("Multimodal is not used by this extension. Focus on the Text Test.");
+        }
+
+        btnText.onclick = testText;
+        btnImage.onclick = testImage;
+
+        // Auto-check on load
+        checkAvailability();
+    </script>
+    </script>
+</body>
+
+</html>

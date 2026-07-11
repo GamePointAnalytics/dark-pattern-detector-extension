@@ -24,7 +24,7 @@ people bought, in \d+ carts, other customers, customers also, trending now, best
 most popular, others looking, people looking
 
 [Confirmshaming]
-no thanks.{0,10}don't, no thanks.{0,10}hate, i don't want to save, don't want to save
+no thanks.{0,10}(don't|hate), i don't want to save, don't want to save
 i prefer paying, prefer paying full, full price, skip this offer, i'll pay more
 pay more later, don't care about, i hate saving
 
@@ -57,3 +57,21 @@ opt.?in, opted in, pre.?selected
 create (an )?account to, sign up to (view|continue|access), enter (your )?email to
 share (to|with \d+), download (our |the )?app to, turn on notifications
 enable (notifications|location) to, invite friends to
+
+
+[Trick Questions]
+uncheck (if|box) to (avoid|stop), uncheck if you (do not|don't) want, check (if|box) to (opt|cancel), tick to (not|stop)
+do not (send|subscribe) me, (un)?subscribe unless, i do not want to not, click here to not
+verify you (do not|don't) want, toggle (off|on) to (avoid|stop)
+
+[Click Bait]
+you won't believe, what happens next, shocking truth, secret they don't want you to know
+this one trick, number \d+ will shock you, blow your mind, left in tears, going viral
+experts hate, miracle cure, startling, outrageous, mind-blowing, jaw-dropping, unbelievable secret
+
+[Curiosity Gap]
+you won't believe why, they finally revealed, the secret behind, what they aren't telling you
+the real reason, the truth about, mysterious, raises eyebrows, nobody is talking about
+doctors hate this, what mainstream media won't tell you, one weird trick
+this is why you're wrong about, leaves little to the imagination, beyond belief
+left everyone speechless, the internet is losing it, broke the internet, has people divided
