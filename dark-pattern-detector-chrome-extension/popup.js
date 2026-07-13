@@ -25,19 +25,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         const patternsList = document.getElementById('patternsList');
         patternsList.innerHTML = '';
 
-        // Update Detection Mode Badge
+        // Update Detection Mode Badge — reflects whether Gemini Nano actually
+        // verified hits this scan ("AI-verified") or it ran regex-only.
         const modeBadge = document.getElementById('modeBadge');
         if (modeBadge) {
-            if (data.mode === "Fallback Regex") {
+            if (data.mode === "AI-verified") {
+                modeBadge.textContent = "AI-VERIFIED";
+                modeBadge.className = "badge ai";
+                modeBadge.style.background = ""; // Reset to CSS gradient
+                modeBadge.style.color = "";
+            } else {
                 modeBadge.textContent = "REGEX ONLY";
                 modeBadge.className = "badge regex";
                 modeBadge.style.background = "#e0e0e0";
                 modeBadge.style.color = "#666";
-            } else {
-                modeBadge.textContent = "AI SANDBOX";
-                modeBadge.className = "badge ai";
-                modeBadge.style.background = ""; // Reset to CSS gradient
-                modeBadge.style.color = "";
             }
         }
 
@@ -148,7 +149,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // Update mode even while scanning if available
                 if (response.mode) {
                     const modeBadge = document.getElementById('modeBadge');
-                    if (modeBadge && response.mode === "Fallback Regex") {
+                    if (modeBadge && response.mode !== "AI-verified") {
                         modeBadge.textContent = "REGEX ONLY";
                         modeBadge.className = "badge regex";
                     }
@@ -212,4 +213,28 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
     });
+    // Visual Interference Toggle Handler
+    const toggleVisual = document.getElementById('toggleVisual');
+    if (toggleVisual) {
+        // Load saved state
+        chrome.storage.local.get(['visualEnabled'], (result) => {
+            toggleVisual.checked = result.visualEnabled || false;
+        });
+
+        // Save state on change
+        toggleVisual.addEventListener('change', async () => {
+            const newState = toggleVisual.checked;
+            await chrome.storage.local.set({ visualEnabled: newState });
+
+            // Notify active tab to update immediately
+            const tab = await getCurrentTab();
+            if (tab?.id) {
+                chrome.tabs.sendMessage(tab.id, {
+                    action: "updateConfig",
+                    visualEnabled: newState
+                });
+            }
+        });
+    }
+
 });

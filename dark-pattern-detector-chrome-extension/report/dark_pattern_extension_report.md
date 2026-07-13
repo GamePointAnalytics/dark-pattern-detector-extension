@@ -6,8 +6,9 @@ The Dark Pattern Detector is a Chrome extension designed to help users navigate 
 The extension aims to protect users from manipulative texts and interface designs that utilize psychology to trick them into taking unintended actions, such as making impulsive purchases, signing up for unwanted newsletters, or facing difficulties in cancelling subscriptions.
 
 It employs a Hybrid Detection Engine that combines:
-*   **Broad Match Regex**: Instantly scans for over 120 suspicion keywords across 10 distinct categories. The keywords are stored in a text file and are loaded into memory when the extension is loaded. Users can add or remove keywords from the file to customize the detection engine.
-*   **On-Device AI**: Uses TensorFlow.js and the Universal Sentence Encoder (USE, a pre-trained AI model by Google) running in a secure sandbox to analyze the context of detected text, reducing false positives. Once a keyword is detected, the program retrieves surrounding text and sends it to the AI for analysis. The AI then returns a confidence score and the type of dark pattern detected. If the confidence score is above a threshold, the text is flagged. If the AI model fails to load, the extension will default to using only the simpler Regex regular expression keyword matching.
+*   **Regex Matcher**: Instantly scans visible text nodes for manipulative phrases across 13 distinct categories. The patterns are stored in `patterns.txt` and are loaded into memory when the extension loads. Users can add or remove patterns from the file to customize the detection engine.
+*   **Visual Heuristics**: Analyzes computed styles — WCAG contrast ratios, opacity, and font-size — to detect **Visual Interference** (false hierarchy), e.g. a faint "Reject" button placed beside a bold "Accept".
+*   **Optional On-Device AI (Gemini Nano)**: When Chrome's built-in AI (`window.LanguageModel`) is available, regex hits are asynchronously verified on-device to reduce false positives. A high-confidence "benign" verdict removes the highlight. The AI runs in an offscreen document (the Prompt API is not visible from content scripts or Web Workers), with the background service worker managing its lifecycle. If built-in AI is unavailable, the extension runs fully in Regex-only mode with no loss of core functionality.
 *   **Visibility Filters**: Ensures that only text currently visible to the user is flagged.
 
 ## 2. Limitations
@@ -15,17 +16,17 @@ It employs a Hybrid Detection Engine that combines:
 *   **Language Support**: Currently optimized for English language patterns.
 *   **Desktop Only**: As a Chrome extension, it currently runs only on desktop versions of the Chrome browser, not on mobile devices (though it prototypes mobile app logic).
 *   **Performance**: While optimized, heavy pages with massive amounts of text might experience slight delays during the initial scan.
-*   **AI Sandbox**: The AI runs in an isolated sandbox for security, which adds a small communication overhead compared to running directly in the main context.
+*   **Optional AI Overhead**: When Gemini Nano is enabled, AI verification adds a small async communication overhead (content → background → offscreen document); it never blocks the synchronous regex scan.
 *   **Interpretation Accuracy**: The system may interpret benign language or user interface elements as dark patterns (false positives) in ambiguous contexts.
 
 ## 3. Privacy & AI Architecture
 **Local Processing**
-The "thinking" (inference) happens 100% on your computer's processor (CPU/GPU) inside the Chrome browser.
-*   **Privacy**: The text from the websites you visit is **never** sent to a cloud server for analysis. It stays in your browser's "Sandbox".
-*   **Offline Capability**: The code to run the AI is bundled in your extension.
+The "thinking" (inference) happens 100% on your device inside the Chrome browser.
+*   **Privacy**: The text from the websites you visit is **never** sent to a cloud server for analysis. Regex and visual detection run locally in the content script; optional AI verification runs on-device via Chrome's built-in Gemini Nano.
+*   **No External Downloads**: The regex + visual engine ships with the extension and needs no external assets. Gemini Nano, when enabled, is downloaded and managed by Chrome itself (not the extension) on first use.
 
-**Model Weights**
-While the engine code (`tf.min.js`) is included in your extension, the **Model Weights** (the actual "brain" data, ~30MB) are fetched from Google's servers (TFHub) the first time you run the extension.
+**Optional AI: Gemini Nano**
+When Chrome's built-in AI is available (`window.LanguageModel`), the extension uses it to verify borderline regex hits on-device. This is a progressive enhancement: if the API is absent (most installs), the extension operates in Regex-only mode. The AI inference runs inside an offscreen document hosted by the extension; the background service worker creates and manages that document.
 
 ## 4. How to install
 1.  **Clone the Repository**:
@@ -47,10 +48,10 @@ While the engine code (`tf.min.js`) is included in your extension, the **Model W
 
 ## 5. How to use
 1.  **Browse Normally**:
-    Visit any website, particularly e-commerce sites where dark patterns are common. The extension automatically scans the page 2 seconds after it loads.
+    Visit any website, particularly e-commerce sites where dark patterns are common. The extension automatically scans the page on load and re-scans incrementally as the DOM changes (e.g. infinite scroll, SPA navigation).
 2.  **Visual Indicators**:
     *   **Highlights**: Suspicious text will be highlighted directly on the page.
-    *   **Tooltips**: Hover over a highlight to see the type of dark pattern detected (e.g., "Urgency", "Scarcity") and the AI confidence score.
+    *   **Tooltips**: Hover over a highlight to see the type of dark pattern detected (e.g., "Urgency", "Scarcity").
 3.  **Popup Dashboard**:
     Click the extension icon in the Chrome toolbar to open the popup.
     *   **Status**: See if the page is "Clean" or how many patterns were detected.

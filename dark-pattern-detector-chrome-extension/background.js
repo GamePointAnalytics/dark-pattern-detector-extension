@@ -1,85 +1,58 @@
 /**
  * DarkPatternDetector - Background Service Worker
- * 
- * Manages the offscreen document and routes requests to it.
+ *
+ * Owns the lifecycle of the offscreen document that hosts Chrome's built-in AI
+ * (Gemini Nano / window.LanguageModel). Content scripts ask the background to
+ * "predict"; the background lazily creates the offscreen document (if needed)
+ * and forwards the request. If built-in AI is unavailable, callers fall back
+ * to the regex result — the extension keeps working.
  */
 
-// Ensure offscreen document is open
-async function setupOffscreenDocument(path) {
-    // Check if offscreen document already exists
-    const existingContexts = await chrome.runtime.getContexts({
-        contextTypes: ['OFFSCREEN_DOCUMENT']
-    });
+let offscreenCreating = null;
 
-    if (existingContexts.length > 0) {
-        return;
-    }
-
-    // Create offscreen document
-    await chrome.offscreen.createDocument({
-        url: path,
-        reasons: ['DOM_PARSER'], // Justification (we need DOM to host iframe)
-        justification: 'Sandboxing TensorFlow.js execution'
-    });
-}
-
-// Initialize on install/startup
-chrome.runtime.onInstalled.addListener(async () => {
-    await setupOffscreenDocument('offscreen.html');
-    console.log("[Background] Offscreen document created");
+chrome.runtime.onInstalled.addListener(() => {
+    console.log("[Background] Extension installed.");
 });
 
-// Listener for messages from Content Script
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    // Only handle messages from content scripts, not from offscreen
-    if (!sender.tab) {
-        return false; // Ignore messages from extension contexts
-    }
+// Ensure exactly one offscreen document exists. Resolves once it's ready.
+async function ensureOffscreen() {
+    // Already exists?
+    const existing = await chrome.offscreen.hasDocument?.();
+    if (existing) return;
 
-    // Ensure offscreen doc exists
-    setupOffscreenDocument('offscreen.html').then(async () => {
+    if (offscreenCreating) return offscreenCreating;
 
-        if (request.action === 'predict') {
-            console.log("[Background] Forwarding prediction to offscreen:", request.text.substring(0, 20) + "...");
-
-            try {
-                // Send message to the offscreen document context
-                const offscreenContexts = await chrome.runtime.getContexts({
-                    contextTypes: ['OFFSCREEN_DOCUMENT']
-                });
-
-                if (offscreenContexts.length === 0) {
-                    throw new Error("Offscreen document not found");
-                }
-
-                // Send message specifically to offscreen document
-                const response = await chrome.runtime.sendMessage({
-                    action: 'predict',
-                    text: request.text
-                });
-
-                console.log("[Background] Received response from offscreen:", response);
-                sendResponse(response);
-            } catch (err) {
-                console.error("[Background] Prediction error:", err);
-                sendResponse({ error: err.message, fallback: true });
-            }
-
-            return true; // Keep channel open
-        }
-
-        if (request.action === 'getModelStatus' || request.action === 'initModel') {
-            try {
-                const response = await chrome.runtime.sendMessage({
-                    action: 'initModel'
-                });
-                sendResponse(response);
-            } catch (err) {
-                sendResponse({ ready: false, error: err.message });
-            }
-            return true;
-        }
+    offscreenCreating = chrome.offscreen.createDocument({
+        url: 'offscreen.html',
+        reasons: ['AI_LANGUAGE_MODEL'],
+        justification: 'Verify dark-pattern candidates on-device with Gemini Nano to reduce false positives.'
     });
 
-    return true; // Async response
+    try {
+        await offscreenCreating;
+    } finally {
+        offscreenCreating = null;
+    }
+}
+
+// Route predict requests from content -> offscreen document.
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action !== 'predict') return;
+
+    (async () => {
+        try {
+            await ensureOffscreen();
+            const verdict = await chrome.runtime.sendMessage({
+                action: 'offscreenPredict',
+                text: request.text,
+                category: request.category
+            });
+            sendResponse(verdict || { fallback: true });
+        } catch (e) {
+            console.warn("[Background] predict failed:", e?.message || e);
+            sendResponse({ fallback: true, error: e?.message || String(e) });
+        }
+    })();
+
+    return true; // async response
 });

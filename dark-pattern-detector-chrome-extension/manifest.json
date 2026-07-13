@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "DarkPatternDetector",
-  "version": "2.3",
-  "description": "AI-powered detection and highlighting of manipulative design patterns (Dark Patterns) on web pages.",
+  "version": "3.0",
+  "description": "Privacy-first detection and highlighting of manipulative design patterns (Dark Patterns) on web pages. Regex engine with optional on-device AI verification (Gemini Nano).",
   "permissions": [
     "activeTab",
     "scripting",
@@ -21,19 +21,10 @@
     "48": "images/icon.svg",
     "128": "images/icon.svg"
   },
-  "sandbox": {
-    "pages": [
-      "sandbox.html"
-    ]
-  },
   "web_accessible_resources": [
     {
       "resources": [
         "images/*.png",
-        "lib/tf.min.js",
-        "lib/use.min.js",
-        "sandbox.html",
-        "sandbox.js",
         "patterns.txt"
       ],
       "matches": [
@@ -47,7 +38,6 @@
         "<all_urls>"
       ],
       "js": [
-        "lib/tf-stub.js",
         "content.js"
       ],
       "css": [
