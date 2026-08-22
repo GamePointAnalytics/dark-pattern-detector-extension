@@ -225,6 +225,13 @@
       transform: rotate(0deg);
     }
 
+    .pattern-explanation {
+      margin: -2px 0 6px;
+      color: #777;
+      font-size: 10px;
+      line-height: 1.35;
+    }
+
     /* Ensure the type name is on the left and badge on the right, but before the arrow */
     details.pattern-group summary>span:first-child {
       flex-grow: 1;
@@ -248,6 +255,16 @@
       gap: 6px;
     }
 
+    .insights-note {
+      margin: 10px 0 8px;
+      padding: 8px;
+      border-radius: 6px;
+      background: #f5f6ff;
+      color: #4b4f79;
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
     .pattern-label {
       min-width: 0;
       flex: 1;
@@ -268,6 +285,21 @@
     }
 
     button.feedback-btn:hover {
+      box-shadow: none;
+    }
+
+    button.safety-btn {
+      width: auto;
+      flex: 0 0 auto;
+      padding: 3px 6px;
+      border-radius: 5px;
+      background: #fff3e0;
+      color: #7a4500;
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    button.safety-btn:hover {
       box-shadow: none;
     }
   </style>
@@ -294,6 +326,7 @@
 
     <div class="stats">
       <div id="patternsList"></div>
+      <div id="insightsStatus" class="insights-note">Loading local summary…</div>
       <div class="stats-row" style="margin-top: 12px; border-top: 1px solid #eee; padding-top: 8px;">
         <span>Total Detected:</span>
         <span id="patternCount">0</span>

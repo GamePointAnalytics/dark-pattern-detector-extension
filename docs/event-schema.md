@@ -43,5 +43,6 @@ This is the initial conceptual schema for local events. It is intentionally smal
 
 - Do not add raw text, screenshots, exact URLs, usernames, or account names to this schema without a new privacy review.
 - `signals` records model outputs, not confirmed facts.
+- Confidence expresses detector certainty about its local signal, not whether a design is manipulative or harmful. Current deterministic text rules use `0.75`; visual heuristics use `0.60`.
 - `feedback` is separate from `signals`; a person correcting the model must not silently rewrite detector performance history.
 - `researchExportEligible` is false unless research consent and study policy allow the event.

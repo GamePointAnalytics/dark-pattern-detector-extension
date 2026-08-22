@@ -54,7 +54,23 @@ function getObservationState() {
     return isPaused ? 'paused' : 'active';
 }
 
+function detectionMetadata(detector) {
+    if (detector === 'heuristic') {
+        return {
+            confidence: 0.6,
+            detector: 'visual-heuristic',
+            explanation: 'A local visual heuristic found an opposing action that appears less prominent. Review it before acting.'
+        };
+    }
+    return {
+        confidence: 0.75,
+        detector: 'deterministic-rule',
+        explanation: 'Matched a configured local text rule. Review and correct it if it does not fit this page.'
+    };
+}
+
 function createLocalEvent(detectionId, type, detector) {
+    const metadata = detectionMetadata(detector);
     return {
         schemaVersion: '0.1',
         eventId: detectionId,
@@ -72,8 +88,8 @@ function createLocalEvent(detectionId, type, detector) {
         signals: [{
             category: type,
             subtype: null,
-            confidence: detector === 'regex' ? 1 : 0.7,
-            detector,
+            confidence: metadata.confidence,
+            detector: metadata.detector,
             modelVersion: detector === 'regex' ? 'patterns-v3' : 'visual-heuristic-v3'
         }],
         feedback: {
@@ -208,7 +224,9 @@ async function scanAndHighlight(roots, incremental = false) {
                 detectionResults.push({
                     detectionId,
                     type,
-                    text: (el.textContent || "").substring(0, 50)
+                    text: (el.textContent || "").substring(0, 50),
+                    safetyAction: el.dataset.safeWebSafetyAction || 'none',
+                    ...detectionMetadata('regex')
                 });
                 // Re-submit existing highlights. The background deduplicates by
                 // detection ID, while a just-cleared history is repopulated.
@@ -285,7 +303,8 @@ async function scanAndHighlight(roots, incremental = false) {
                     detectionId,
                     type: candidate.pattern.type,
                     text: candidate.content.substring(0, 50),
-                    aiScore: "Regex"
+                    aiScore: "Regex",
+                    ...detectionMetadata('regex')
                 });
                 localEvents.push(createLocalEvent(detectionId, candidate.pattern.type, 'regex'));
 
@@ -312,7 +331,8 @@ async function scanAndHighlight(roots, incremental = false) {
                     detectionId,
                     type: "Visual Interference",
                     text: cand.text.substring(0, 50),
-                    aiScore: "Heuristic"
+                    aiScore: "Heuristic",
+                    ...detectionMetadata('heuristic')
                 });
                 localEvents.push(createLocalEvent(detectionId, 'Visual Interference', 'heuristic'));
             });
@@ -443,7 +463,9 @@ function getResults() {
             detectionResults.push({
                 detectionId: el.dataset.safeWebDetectionId || createId('detection'),
                 type: el.dataset.safeWebType || "Unknown",
-                text: (el.textContent || "").substring(0, 50)
+                text: (el.textContent || "").substring(0, 50),
+                safetyAction: el.dataset.safeWebSafetyAction || 'none',
+                ...detectionMetadata('regex')
             });
         });
     }
@@ -455,6 +477,30 @@ function getResults() {
         sessionState: getObservationState(),
         mode: lastScanUsedNano && nanoStatus === 'available' ? "AI-verified" : "Regex only"
     };
+}
+
+function applySafetyAction(eventIds, safetyAction) {
+    const ids = new Set(Array.isArray(eventIds) ? eventIds.map(String) : []);
+    if (ids.size === 0 || !['blur', 'none'].includes(safetyAction)) return { applied: 0 };
+
+    let applied = 0;
+    document.querySelectorAll('.safe-web-highlight').forEach(element => {
+        if (!ids.has(element.dataset.safeWebDetectionId)) return;
+        if (safetyAction === 'blur') {
+            element.style.filter = 'blur(4px)';
+            element.dataset.safeWebSafetyAction = 'blur';
+            element.title = `${element.title}\nSafety action: blurred by you`;
+        } else {
+            element.style.removeProperty('filter');
+            delete element.dataset.safeWebSafetyAction;
+        }
+        applied++;
+    });
+
+    detectionResults = detectionResults.map(result => ids.has(result.detectionId)
+        ? { ...result, safetyAction }
+        : result);
+    return { applied, safetyAction };
 }
 
 // --- Message listeners ---
@@ -479,6 +525,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return false;
     } else if (request.action === "getResults") {
         sendResponse(getResults());
+    } else if (request.action === "applySafetyAction") {
+        sendResponse(applySafetyAction(request.eventIds, request.safetyAction));
     } else if (request.action === "togglePause") {
         isPaused = request.isPaused;
         observationActive = true;

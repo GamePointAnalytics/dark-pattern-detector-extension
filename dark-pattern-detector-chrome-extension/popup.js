@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const statusDiv = document.getElementById('status');
     const patternCountSpan = document.getElementById('patternCount');
     const historyStatus = document.getElementById('historyStatus');
+    const insightsStatus = document.getElementById('insightsStatus');
     let observationState = 'inactive';
     let feedbackByEventId = {};
 
@@ -43,6 +44,25 @@ document.addEventListener('DOMContentLoaded', async () => {
             historyStatus.textContent = marked > 0 ? `${count} stored · ${marked} marked` : `${count} stored`;
         } catch (_) {
             historyStatus.textContent = 'Unavailable';
+        }
+    }
+
+    async function refreshLocalInsights() {
+        try {
+            const insights = await chrome.runtime.sendMessage({ action: 'getLocalInsights' });
+            if (!insights.eventCount) {
+                insightsStatus.textContent = 'No local insight yet — scan a supported page to create your first local signal.';
+                return;
+            }
+
+            const categories = (insights.topCategories || [])
+                .map(item => `${item.category} (${item.count})`)
+                .join(' · ');
+            const sessions = insights.sessionCount === 1 ? '1 session' : `${insights.sessionCount} sessions`;
+            const recordedHours = insights.timeBucketCount === 1 ? '1 recorded hour' : `${insights.timeBucketCount || 0} recorded hours`;
+            insightsStatus.textContent = `Local summary: ${insights.eventCount} signals across ${sessions}${categories ? ` — ${categories}` : ''}. Observation window: ${recordedHours}. Stored on this device; Delete Local History removes it.`;
+        } catch (_) {
+            insightsStatus.textContent = 'Local insight is unavailable.';
         }
     }
 
@@ -136,16 +156,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                     // Keep IDs so feedback can update only the matching local events.
                     if (!details[r.type][r.text]) {
-                        details[r.type][r.text] = [];
+                        details[r.type][r.text] = { detectionIds: [], safetyActions: [], explanations: [] };
                     }
-                    if (r.detectionId) details[r.type][r.text].push(r.detectionId);
+                    if (r.detectionId) {
+                        details[r.type][r.text].detectionIds.push(r.detectionId);
+                        details[r.type][r.text].safetyActions.push(r.safetyAction || 'none');
+                        details[r.type][r.text].explanations.push(r.explanation || 'Matched a local detection rule. Review it before acting.');
+                    }
                 });
             }
 
             // Display breakdown with Details
             Object.entries(details).forEach(([type, textCounts]) => {
                 // Calculate total patterns for this type (sum of all frequencies)
-                const totalForType = Object.values(textCounts).reduce((total, ids) => total + ids.length, 0);
+                const totalForType = Object.values(textCounts).reduce((total, group) => total + group.detectionIds.length, 0);
 
                 const detailsEl = document.createElement('details');
                 detailsEl.className = 'pattern-group';
@@ -158,11 +182,21 @@ document.addEventListener('DOMContentLoaded', async () => {
                 `;
                 detailsEl.appendChild(summary);
 
+                const explanation = [...new Set(Object.values(textCounts)
+                    .flatMap(group => group.explanations))][0];
+                if (explanation) {
+                    const explanationEl = document.createElement('p');
+                    explanationEl.className = 'pattern-explanation';
+                    explanationEl.textContent = explanation;
+                    detailsEl.appendChild(explanationEl);
+                }
+
                 // List of found texts with frequency counts
                 const ul = document.createElement('ul');
                 ul.className = 'pattern-list';
 
-                Object.entries(textCounts).forEach(([text, detectionIds]) => {
+                Object.entries(textCounts).forEach(([text, group]) => {
+                    const { detectionIds, safetyActions } = group;
                     const li = document.createElement('li');
                     const label = document.createElement('span');
                     label.className = 'pattern-label';
@@ -206,6 +240,34 @@ document.addEventListener('DOMContentLoaded', async () => {
                         });
                         li.appendChild(feedbackBtn);
                     }
+                    if (detectionIds.length > 0) {
+                        const safetyBtn = document.createElement('button');
+                        safetyBtn.className = 'safety-btn';
+                        const isBlurred = safetyActions.length > 0 && safetyActions.every(action => action === 'blur');
+                        safetyBtn.textContent = isBlurred ? 'Unblur' : 'Blur';
+                        safetyBtn.title = isBlurred ? 'Restore highlighted text on this page' : 'Blur highlighted text on this page';
+                        safetyBtn.addEventListener('click', async () => {
+                            safetyBtn.disabled = true;
+                            const safetyAction = isBlurred ? 'none' : 'blur';
+                            try {
+                                const tabResult = await sendToCurrentTab({ action: 'applySafetyAction', eventIds: detectionIds, safetyAction });
+                                if (!tabResult.delivered || !tabResult.response?.applied) {
+                                    safetyBtn.textContent = 'Page unavailable';
+                                    return;
+                                }
+                                await chrome.runtime.sendMessage({
+                                    action: 'updateLocalEventFeedback',
+                                    eventIds: detectionIds,
+                                    feedback: { safetyAction }
+                                });
+                                safetyBtn.textContent = safetyAction === 'blur' ? 'Blurred' : 'Unblurred';
+                            } catch (_) {
+                                safetyBtn.textContent = 'Try again';
+                                safetyBtn.disabled = false;
+                            }
+                        });
+                        li.appendChild(safetyBtn);
+                    }
                     ul.appendChild(li);
                 });
                 detailsEl.appendChild(ul);
@@ -224,6 +286,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else if (message.action === "resultsReady") {
             void updateUI(message);
             refreshLocalHistory();
+            refreshLocalInsights();
         }
     });
 
@@ -307,6 +370,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const response = await chrome.runtime.sendMessage({ action: 'clearLocalHistory' });
             historyStatus.textContent = response.cleared ? '0 stored' : 'Delete failed';
+            refreshLocalInsights();
         } catch (_) {
             historyStatus.textContent = 'Delete failed';
         }
@@ -337,6 +401,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     updateObservationControls(observationState);
-    refreshLocalHistory();
+    await refreshLocalHistory();
+    await refreshLocalInsights();
 
 });

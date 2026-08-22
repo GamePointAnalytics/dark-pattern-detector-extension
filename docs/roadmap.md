@@ -50,8 +50,9 @@ The goal for the next work session is to strengthen the existing browser MVP bef
 ### 4. Prepare the first personal insights view
 
 - [ ] Define two or three non-diagnostic summaries, such as detections by category and exposure over time.
-- [ ] Display the observation window and local-data scope beside every summary.
-- [ ] Make insufficient-data states explicit instead of implying a conclusion.
+- [x] Show a local category-and-session summary from minimized events in the popup.
+- [x] Display the observation window and local-data scope beside every summary.
+- [x] Make insufficient-data states explicit instead of implying a conclusion.
 - [ ] Keep all calculations local and make the result deletable.
 
 ### 5. Defer intentionally
@@ -85,8 +86,9 @@ The goal for the next work session is to strengthen the existing browser MVP bef
 
 ## Phase 3 — Safety actions and quality
 
-- Add blur/hide/mute controls where platform capabilities allow.
-- Add confidence-aware explanations.
+- [x] Add a person-controlled, reversible blur action for extension-highlighted text.
+- [ ] Add hide/mute controls only where platform capabilities and reversibility are clear.
+- [x] Add confidence-aware explanations that describe local rules or heuristics as advisory candidates.
 - Create labeled evaluation fixtures and regression tests.
 - Add accessibility, performance, and failure-mode testing.
 

@@ -83,11 +83,21 @@ function sanitizeFeedback(feedback) {
     };
 }
 
+function sanitizeFeedbackPatch(feedback) {
+    const value = feedback || {};
+    const patch = {};
+    if (['relevant', 'not_relevant', 'unknown'].includes(value.relevance)) patch.relevance = value.relevance;
+    if (['wanted', 'not_wanted', 'unknown'].includes(value.wantedness)) patch.wantedness = value.wantedness;
+    if (['none', 'dismiss', 'blur', 'hide', 'mute', 'block', 'pause'].includes(value.safetyAction)) patch.safetyAction = value.safetyAction;
+    return patch;
+}
+
 function updateLocalEventFeedback(eventIds, feedback) {
     const ids = new Set(Array.isArray(eventIds) ? eventIds.map(String) : []);
     if (ids.size === 0) return Promise.resolve({ updated: 0 });
 
-    const safeFeedback = sanitizeFeedback(feedback);
+    const safeFeedbackPatch = sanitizeFeedbackPatch(feedback);
+    if (Object.keys(safeFeedbackPatch).length === 0) return Promise.resolve({ updated: 0 });
     eventWriteChain = eventWriteChain.catch(() => undefined).then(async () => {
         const stored = await chrome.storage.local.get(LOCAL_EVENT_STORE_KEY);
         const current = Array.isArray(stored[LOCAL_EVENT_STORE_KEY]) ? stored[LOCAL_EVENT_STORE_KEY] : [];
@@ -95,7 +105,7 @@ function updateLocalEventFeedback(eventIds, feedback) {
         const next = current.map(event => {
             if (!ids.has(event.eventId)) return event;
             updated++;
-            return { ...event, feedback: { ...(event.feedback || {}), ...safeFeedback } };
+            return { ...event, feedback: { ...sanitizeFeedback(event.feedback), ...safeFeedbackPatch } };
         });
         await chrome.storage.local.set({ [LOCAL_EVENT_STORE_KEY]: next });
         return { updated };
@@ -115,6 +125,33 @@ async function getLocalHistorySummary() {
         else feedback.unanswered++;
     });
     return { count: events.length, feedback };
+}
+
+async function getLocalInsights() {
+    const stored = await chrome.storage.local.get(LOCAL_EVENT_STORE_KEY);
+    const events = Array.isArray(stored[LOCAL_EVENT_STORE_KEY]) ? stored[LOCAL_EVENT_STORE_KEY] : [];
+    const categoryCounts = new Map();
+    const sessionIds = new Set();
+    const timeBuckets = new Set();
+
+    events.forEach(event => {
+        if (event.sessionId && event.sessionId !== 'unknown') sessionIds.add(event.sessionId);
+        if (event.occurredAtBucket) timeBuckets.add(event.occurredAtBucket);
+        (event.signals || []).forEach(signal => {
+            const category = String(signal.category || 'unknown');
+            categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1);
+        });
+    });
+
+    return {
+        eventCount: events.length,
+        sessionCount: sessionIds.size,
+        timeBucketCount: timeBuckets.size,
+        topCategories: [...categoryCounts.entries()]
+            .map(([category, count]) => ({ category, count }))
+            .sort((a, b) => b.count - a.count || a.category.localeCompare(b.category))
+            .slice(0, 3)
+    };
 }
 
 async function getLocalEventFeedback(eventIds) {
@@ -173,6 +210,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         getLocalEventFeedback(request.eventIds)
             .then(sendResponse)
             .catch(error => sendResponse({ error: error.message || String(error), feedbackByEventId: {} }));
+        return true;
+    }
+
+    if (request.action === 'getLocalInsights') {
+        getLocalInsights()
+            .then(sendResponse)
+            .catch(error => sendResponse({ error: error.message || String(error), eventCount: 0, sessionCount: 0, topCategories: [] }));
         return true;
     }
 
