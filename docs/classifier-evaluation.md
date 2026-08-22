@@ -16,6 +16,12 @@
 - Test adversarial inputs such as slang, cropping, memes, coded language, and intentionally misleading layouts.
 - Record detector version and evaluation version with every result.
 
+## Development regression fixtures
+
+`dark-pattern-detector-chrome-extension/fixtures/detection-context-cases.json` is the small, labeled development fixture set for deterministic text detection. It includes positive purchase-language examples plus known false-positive contexts such as navigation, footer, explicit negation, and quoted design guidance. It is run by `test_detector_core.js`.
+
+This fixture set is for fast development regression only. A later evaluation set must remain separate from the examples used to tune rules.
+
 ## Product behavior
 
 - High-confidence safety signals may offer a warning or blur, subject to the person’s settings.

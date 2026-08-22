@@ -47,10 +47,11 @@ dark-pattern-detector-chrome-extension/
 
 ## Development and testing
 
-There is currently no build step or automated test suite. For basic validation:
+There is currently no build step. The pure detector and popup feedback paths have lightweight Node regression tests. For basic validation:
 
 - Run `node --check` on the JavaScript files after edits.
 - Run `node dark-pattern-detector-chrome-extension/test_detector_core.js` to verify the pure text-detection module.
+- Run `node dark-pattern-detector-chrome-extension/test_popup_feedback_persistence.js` to verify feedback survives popup reopening.
 - Load the extension unpacked in Chrome.
 - Use `test_page.html` and `test_context.html` to exercise regex detection and context handling.
 - Use `test_nano.html` only when testing Chrome’s optional built-in AI capability.

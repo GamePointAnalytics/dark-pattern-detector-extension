@@ -58,6 +58,43 @@
         });
     }
 
+    function isBoilerplateElement(element) {
+        const tagName = String(element && element.tagName || '').toUpperCase();
+        const landmark = String(element && element.landmark || '').toLowerCase();
+        return ['NAV', 'FOOTER'].includes(tagName) || /\b(navigation|nav|contentinfo|footer)\b/.test(landmark);
+    }
+
+    function isNegatedMatch(text, matchIndex) {
+        const precedingText = String(text || '').slice(Math.max(0, matchIndex - 36), matchIndex).toLowerCase();
+        return /\b(?:not|never|no|without)\s+(?:(?:a|an|the)\s+)?$/.test(precedingText) ||
+            /\b(?:do not|don't)\s+(?:(?:a|an|the)\s+)?$/.test(precedingText);
+    }
+
+    function isQuotedEducationalExample(text, matchIndex, matchedText) {
+        const source = String(text || '');
+        const matchEnd = matchIndex + String(matchedText || '').length;
+        const educationalContext = /\b(?:example|examples|phrase|term|label|copy|wording|definition|defined|guide|tutorial|avoid(?:\s+using)?|do not use|don't use)\b/i;
+        if (!educationalContext.test(source)) return false;
+
+        const quotedRanges = [
+            /"[^"\n]{0,160}"/g,
+            /“[^”\n]{0,160}”/g
+        ];
+        return quotedRanges.some(expression => {
+            let quote;
+            while ((quote = expression.exec(source)) !== null) {
+                const quoteEnd = quote.index + quote[0].length;
+                if (matchIndex >= quote.index && matchEnd <= quoteEnd) return true;
+            }
+            return false;
+        });
+    }
+
+    function isBusinessCapabilityStatement(context, matchedText) {
+        if (String(matchedText || '').toLowerCase() !== 'selling fast') return false;
+        return /\b(?:we|i|our company)\s+(?:specialize in|focus on|are known for|help(?:ing)?[^.]{0,45})\s+selling fast\b/i.test(String(context || ''));
+    }
+
     function isEligibleForPattern(pattern, element) {
         if (pattern.type !== 'Curiosity Gap') return true;
 
@@ -69,13 +106,21 @@
         return isHeading || tagName === 'A' || isTitleClass;
     }
 
-    function findMatchingPatterns({ text, patterns, element }) {
-        if (!text || !Array.isArray(patterns) || isIgnoredText(text)) return [];
+    function findMatchingPatterns({ text, context, patterns, element }) {
+        if (!text || !Array.isArray(patterns) || isIgnoredText(text) || isBoilerplateElement(element)) return [];
 
         return patterns.filter(pattern => {
             if (!isEligibleForPattern(pattern, element)) return false;
-            pattern.broadRegex.lastIndex = 0;
-            return pattern.broadRegex.test(text);
+            const expression = new RegExp(pattern.broadRegex.source, pattern.broadRegex.flags);
+            let match;
+            while ((match = expression.exec(text)) !== null) {
+                if (!isNegatedMatch(text, match.index) &&
+                    !isQuotedEducationalExample(text, match.index, match[0]) &&
+                    !isBusinessCapabilityStatement(context, match[0])) {
+                    return true;
+                }
+            }
+            return false;
         });
     }
 
@@ -83,7 +128,11 @@
         parsePatterns,
         findMatchingPatterns,
         isIgnoredText,
-        isEligibleForPattern
+        isEligibleForPattern,
+        isBoilerplateElement,
+        isNegatedMatch,
+        isQuotedEducationalExample,
+        isBusinessCapabilityStatement
     };
 
     root.DarkPatternDetectorCore = detectorCore;

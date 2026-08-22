@@ -236,23 +236,27 @@ async function scanAndHighlight(roots, incremental = false) {
                 if (!content || content.trim().length < 3) return;
                 if (!isVisible(parent)) return;
 
+                // Build surrounding context using textContent (cheap — innerText
+                // forces a layout reflow which is expensive per candidate).
+                let context = content;
+                if (parent.textContent) {
+                    context = parent.textContent.replace(/\s+/g, ' ').trim();
+                    if (context.length > 300) context = context.substring(0, 300) + "...";
+                }
+                const landmarkElement = parent.closest?.('nav, footer, [role="navigation"], [role="contentinfo"]');
+
                 const matchingPatterns = globalThis.DarkPatternDetectorCore.findMatchingPatterns({
                     text: content,
+                    context,
                     patterns: PATTERNS,
                     element: {
                         tagName: parent.tagName || '',
-                        className: typeof parent.className === 'string' ? parent.className : ''
+                        className: typeof parent.className === 'string' ? parent.className : '',
+                        landmark: landmarkElement?.tagName || landmarkElement?.getAttribute?.('role') || ''
                     }
                 });
 
                 if (matchingPatterns.length > 0) {
-                    // Build surrounding context using textContent (cheap — innerText
-                    // forces a layout reflow which is expensive per candidate).
-                    let context = content;
-                    if (parent.textContent) {
-                        context = parent.textContent.replace(/\s+/g, ' ').trim();
-                        if (context.length > 300) context = context.substring(0, 300) + "...";
-                    }
                     matchingPatterns.forEach(pattern => candidates.push({ node, content, context, pattern }));
                 }
 

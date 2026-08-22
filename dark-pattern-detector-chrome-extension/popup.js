@@ -38,7 +38,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function refreshLocalHistory() {
         try {
             const summary = await chrome.runtime.sendMessage({ action: 'getLocalHistorySummary' });
-            historyStatus.textContent = `${summary.count || 0} stored`;
+            const count = summary.count || 0;
+            const marked = summary.feedback?.notRelevant || 0;
+            historyStatus.textContent = marked > 0 ? `${count} stored · ${marked} marked` : `${count} stored`;
         } catch (_) {
             historyStatus.textContent = 'Unavailable';
         }

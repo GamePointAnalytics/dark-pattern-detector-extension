@@ -1,0 +1,45 @@
+[
+  {
+    "name": "purchase urgency remains detectable",
+    "text": "Hurry! Offer ends in 10 minutes.",
+    "element": { "tagName": "P", "className": "product-message" },
+    "expectedTypes": ["Urgency"]
+  },
+  {
+    "name": "product scarcity remains detectable",
+    "text": "This item is selling fast and only 2 remain.",
+    "element": { "tagName": "P", "className": "stock-message" },
+    "expectedTypes": ["Scarcity"]
+  },
+  {
+    "name": "footer chrome is ignored",
+    "text": "Hurry! Offer ends soon.",
+    "element": { "tagName": "FOOTER", "className": "site-footer" },
+    "expectedTypes": []
+  },
+  {
+    "name": "navigation chrome is ignored",
+    "text": "Only 2 left!", 
+    "element": { "tagName": "A", "className": "navigation-link", "landmark": "navigation" },
+    "expectedTypes": []
+  },
+  {
+    "name": "explicit negation is ignored",
+    "text": "This is not a limited time offer; it will remain available year round.",
+    "element": { "tagName": "P", "className": "availability-note" },
+    "expectedTypes": []
+  },
+  {
+    "name": "quoted design guidance is ignored",
+    "text": "Our design guide calls \"Hurry! Offer ends soon!\" an example of urgency language to avoid.",
+    "element": { "tagName": "P", "className": "design-guidance" },
+    "expectedTypes": []
+  },
+  {
+    "name": "business capability language is not scarcity",
+    "text": "selling fast",
+    "context": "We specialize in selling fast sports cars to enthusiasts around the world.",
+    "element": { "tagName": "B", "className": "highlight-candidate" },
+    "expectedTypes": []
+  }
+]

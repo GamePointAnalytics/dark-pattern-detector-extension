@@ -4,6 +4,7 @@ const path = require('node:path');
 const core = require('./detector-core.js');
 
 const patterns = core.parsePatterns(fs.readFileSync(path.join(__dirname, 'patterns.txt'), 'utf8'));
+const contextCases = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'detection-context-cases.json'), 'utf8'));
 
 assert.equal(patterns.length, 13, 'all configured categories should load');
 assert.deepEqual(
@@ -40,5 +41,13 @@ assert.deepEqual(
     }).map(pattern => pattern.type),
     ['Click Bait', 'Curiosity Gap']
 );
+
+contextCases.forEach(testCase => {
+    assert.deepEqual(
+        core.findMatchingPatterns({ text: testCase.text, context: testCase.context, patterns, element: testCase.element }).map(pattern => pattern.type),
+        testCase.expectedTypes,
+        testCase.name
+    );
+});
 
 console.log('detector-core tests passed');

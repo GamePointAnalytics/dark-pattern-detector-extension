@@ -107,7 +107,14 @@ function updateLocalEventFeedback(eventIds, feedback) {
 async function getLocalHistorySummary() {
     const stored = await chrome.storage.local.get(LOCAL_EVENT_STORE_KEY);
     const events = Array.isArray(stored[LOCAL_EVENT_STORE_KEY]) ? stored[LOCAL_EVENT_STORE_KEY] : [];
-    return { count: events.length };
+    const feedback = { unanswered: 0, relevant: 0, notRelevant: 0 };
+    events.forEach(event => {
+        const relevance = event.feedback?.relevance;
+        if (relevance === 'relevant') feedback.relevant++;
+        else if (relevance === 'not_relevant') feedback.notRelevant++;
+        else feedback.unanswered++;
+    });
+    return { count: events.length, feedback };
 }
 
 async function getLocalEventFeedback(eventIds) {

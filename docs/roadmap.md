@@ -21,6 +21,53 @@
 - Implement the product consent gate and inspectable local data view.
 - Keep all screenshot and video permissions absent.
 
+## Tomorrow — focused implementation checklist
+
+The goal for the next work session is to strengthen the existing browser MVP before expanding its capture surface.
+
+### 1. Confirm the current baseline
+
+- [ ] Reload the unpacked extension from the Columbia working copy.
+- [ ] Open `test_page.html` and confirm Start Observation, Scan Current Page, pause/resume, and Delete Local History.
+- [ ] Confirm that clearing history followed by another scan repopulates Local events.
+- [ ] Mark one detection **Not relevant**, close and reopen the popup, and confirm it remains **Marked**.
+- [ ] Open the popup on `chrome://extensions` and confirm no “Receiving end does not exist” error appears.
+
+### 2. Make feedback useful and explainable
+
+- [ ] Decide whether **Not relevant** should hide a detection immediately or only improve future confidence.
+- [ ] Add a visible local feedback summary: relevant, not relevant, and unanswered.
+- [ ] Ensure feedback is never treated as medical, psychological, or definitive truth.
+- [ ] Add a clear “Reset feedback” or equivalent control only after defining its deletion semantics.
+
+### 3. Improve detection quality without changing the product boundary
+
+- [ ] Review false positives in `test_context.html` and add a small labeled fixture set.
+- [ ] Add context-aware matching for negation, quotations, navigation/footer text, and benign urgency language.
+- [ ] Record detector version and confidence consistently in local events.
+- [ ] Add regression tests for every corrected false positive and missed detection.
+
+### 4. Prepare the first personal insights view
+
+- [ ] Define two or three non-diagnostic summaries, such as detections by category and exposure over time.
+- [ ] Display the observation window and local-data scope beside every summary.
+- [ ] Make insufficient-data states explicit instead of implying a conclusion.
+- [ ] Keep all calculations local and make the result deletable.
+
+### 5. Defer intentionally
+
+- [ ] Do not add webcam, microphone, desktop capture, continuous video, or cloud upload.
+- [ ] Do not begin participant research, research export, or health-correlation claims.
+- [ ] Keep screenshot/OCR/image analysis in Phase 2 until the consent, deletion, and capability design is reviewed.
+
+### Definition of done for tomorrow
+
+- The manual baseline checks pass.
+- Feedback survives popup reopening and remains local.
+- At least five false-positive or context cases have regression coverage.
+- A short personal-insights design is written before implementation begins.
+- The working tree is tested and committed with a focused message.
+
 ## Phase 2 — User-controlled content servings
 
 - Add a user-triggered “Analyze this content” action.
