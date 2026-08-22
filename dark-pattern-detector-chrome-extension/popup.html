@@ -265,6 +265,13 @@
       line-height: 1.35;
     }
 
+    .insights-trend {
+      margin: -3px 0 8px;
+      color: #686868;
+      font-size: 10px;
+      line-height: 1.35;
+    }
+
     .pattern-label {
       min-width: 0;
       flex: 1;
@@ -317,7 +324,7 @@
       </label>
     </div>
 
-    <div id="status" class="status">Scanning...</div>
+    <div id="status" class="status" role="status" aria-live="polite">Scanning...</div>
 
     <button id="startBtn">Start Observation</button>
     <button id="scanBtn" style="margin-top: 8px;">Scan Current Page</button>
@@ -326,7 +333,8 @@
 
     <div class="stats">
       <div id="patternsList"></div>
-      <div id="insightsStatus" class="insights-note">Loading local summary…</div>
+      <div id="insightsStatus" class="insights-note" role="status" aria-live="polite">Loading local summary…</div>
+      <div id="insightsTrend" class="insights-trend"></div>
       <div class="stats-row" style="margin-top: 12px; border-top: 1px solid #eee; padding-top: 8px;">
         <span>Total Detected:</span>
         <span id="patternCount">0</span>

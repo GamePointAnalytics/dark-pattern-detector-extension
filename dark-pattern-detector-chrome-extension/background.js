@@ -133,13 +133,22 @@ async function getLocalInsights() {
     const categoryCounts = new Map();
     const sessionIds = new Set();
     const timeBuckets = new Set();
+    const hourlyCategoryCounts = new Map();
 
     events.forEach(event => {
         if (event.sessionId && event.sessionId !== 'unknown') sessionIds.add(event.sessionId);
-        if (event.occurredAtBucket) timeBuckets.add(event.occurredAtBucket);
+        const timeBucket = event.occurredAtBucket;
+        if (timeBucket) {
+            timeBuckets.add(timeBucket);
+            if (!hourlyCategoryCounts.has(timeBucket)) hourlyCategoryCounts.set(timeBucket, new Map());
+        }
         (event.signals || []).forEach(signal => {
             const category = String(signal.category || 'unknown');
             categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1);
+            if (timeBucket) {
+                const hour = hourlyCategoryCounts.get(timeBucket);
+                hour.set(category, (hour.get(category) || 0) + 1);
+            }
         });
     });
 
@@ -150,7 +159,18 @@ async function getLocalInsights() {
         topCategories: [...categoryCounts.entries()]
             .map(([category, count]) => ({ category, count }))
             .sort((a, b) => b.count - a.count || a.category.localeCompare(b.category))
+            .slice(0, 3),
+        recentHours: [...hourlyCategoryCounts.entries()]
+            .sort(([left], [right]) => right.localeCompare(left))
             .slice(0, 3)
+            .map(([bucket, categories]) => ({
+                bucket,
+                count: [...categories.values()].reduce((total, count) => total + count, 0),
+                topCategories: [...categories.entries()]
+                    .map(([category, count]) => ({ category, count }))
+                    .sort((a, b) => b.count - a.count || a.category.localeCompare(b.category))
+                    .slice(0, 2)
+            }))
     };
 }
 
@@ -216,7 +236,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'getLocalInsights') {
         getLocalInsights()
             .then(sendResponse)
-            .catch(error => sendResponse({ error: error.message || String(error), eventCount: 0, sessionCount: 0, topCategories: [] }));
+            .catch(error => sendResponse({ error: error.message || String(error), eventCount: 0, sessionCount: 0, topCategories: [], recentHours: [] }));
         return true;
     }
 

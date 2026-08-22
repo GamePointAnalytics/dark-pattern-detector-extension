@@ -1,5 +1,71 @@
 [
   {
+    "name": "social proof remains detectable",
+    "text": "15 people are viewing this item.",
+    "element": { "tagName": "P", "className": "product-message" },
+    "expectedTypes": ["Social Proof"]
+  },
+  {
+    "name": "confirmshaming remains detectable",
+    "text": "No thanks, I prefer paying full price.",
+    "element": { "tagName": "BUTTON", "className": "decline-offer" },
+    "expectedTypes": ["Confirmshaming"]
+  },
+  {
+    "name": "hidden costs remain detectable",
+    "text": "A processing fee is added at checkout.",
+    "element": { "tagName": "P", "className": "checkout-note" },
+    "expectedTypes": ["Hidden Costs"]
+  },
+  {
+    "name": "hidden subscription remains detectable",
+    "text": "Your free trial auto-renews and is billed monthly.",
+    "element": { "tagName": "P", "className": "trial-note" },
+    "expectedTypes": ["Hidden Subscription"]
+  },
+  {
+    "name": "nagging remains detectable",
+    "text": "Your cart is waiting. Don't forget to complete your purchase.",
+    "element": { "tagName": "P", "className": "cart-reminder" },
+    "expectedTypes": ["Nagging"]
+  },
+  {
+    "name": "obstruction remains detectable",
+    "text": "To cancel, call our support line.",
+    "element": { "tagName": "P", "className": "cancellation-note" },
+    "expectedTypes": ["Obstruction"]
+  },
+  {
+    "name": "preselection remains detectable",
+    "text": "Add device protection to your order.",
+    "element": { "tagName": "LABEL", "className": "add-on" },
+    "expectedTypes": ["Preselection"]
+  },
+  {
+    "name": "forced action remains detectable",
+    "text": "Create an account to continue.",
+    "element": { "tagName": "P", "className": "sign-in-wall" },
+    "expectedTypes": ["Forced Action"]
+  },
+  {
+    "name": "trick question remains detectable",
+    "text": "Uncheck if you do not want emails.",
+    "element": { "tagName": "LABEL", "className": "email-choice" },
+    "expectedTypes": ["Trick Questions"]
+  },
+  {
+    "name": "click bait remains detectable",
+    "text": "You won't believe what happens next.",
+    "element": { "tagName": "A", "className": "headline" },
+    "expectedTypes": ["Click Bait"]
+  },
+  {
+    "name": "curiosity gap remains detectable in a headline",
+    "text": "The secret behind our new feature.",
+    "element": { "tagName": "H2", "className": "headline" },
+    "expectedTypes": ["Curiosity Gap"]
+  },
+  {
     "name": "purchase urgency remains detectable",
     "text": "Hurry! Offer ends in 10 minutes.",
     "element": { "tagName": "P", "className": "product-message" },

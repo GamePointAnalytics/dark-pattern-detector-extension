@@ -26,6 +26,26 @@
         };
     }
 
+    function splitKeywords(line) {
+        const keywords = [];
+        let current = '';
+        let braceDepth = 0;
+
+        for (const character of String(line || '')) {
+            if (character === '{') braceDepth++;
+            if (character === '}' && braceDepth > 0) braceDepth--;
+
+            if (character === ',' && braceDepth === 0) {
+                if (current.trim()) keywords.push(current.trim());
+                current = '';
+            } else {
+                current += character;
+            }
+        }
+        if (current.trim()) keywords.push(current.trim());
+        return keywords;
+    }
+
     function parsePatterns(text) {
         const lines = String(text || '').split('\n');
         const categories = [];
@@ -44,7 +64,7 @@
                 return;
             }
 
-            keywords.push(...line.split(',').map(part => part.trim()).filter(Boolean));
+            keywords.push(...splitKeywords(line));
         });
 
         if (currentCategory) categories.push(createPattern(currentCategory, keywords));
@@ -126,6 +146,7 @@
 
     const detectorCore = {
         parsePatterns,
+        splitKeywords,
         findMatchingPatterns,
         isIgnoredText,
         isEligibleForPattern,

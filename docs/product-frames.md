@@ -28,6 +28,10 @@ Research is a backlog frame, not an automatic destination for product data. It r
 
 All three frames can use local events, but only the research frame can produce a research export. Raw captures remain disposable unless a separate, explicit capture-review consent is active.
 
+## Observational integrity
+
+Personal safety actions are useful product features, but they change what a person sees and does. The default insight experience—and any future observational research baseline—must keep those actions off unless the person explicitly enables one. If an approved study evaluates blur, warnings, or another protection feature, it is an intervention condition and must be analyzed separately from passive observation.
+
 ## Capture relationship
 
 Personal safety and personal insights begin with Browser Observation. Active-tab analysis is a person-triggered enhancement when text and page metadata cannot answer the question. Research sessions are a backlog-only mode with separate consent and approval; they must not be repurposed into normal-product monitoring.

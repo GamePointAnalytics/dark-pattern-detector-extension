@@ -52,6 +52,7 @@ There is currently no build step. The pure detector and popup feedback paths hav
 - Run `node --check` on the JavaScript files after edits.
 - Run `node dark-pattern-detector-chrome-extension/test_detector_core.js` to verify the pure text-detection module.
 - Run `node dark-pattern-detector-chrome-extension/test_popup_feedback_persistence.js` to verify feedback survives popup reopening.
+- Run `node dark-pattern-detector-chrome-extension/evaluate_detector.js` to print category-level development-fixture precision and recall.
 - Load the extension unpacked in Chrome.
 - Use `test_page.html` and `test_context.html` to exercise regex detection and context handling.
 - Use `test_nano.html` only when testing Chrome’s optional built-in AI capability.
@@ -77,6 +78,7 @@ Detection patterns can be edited directly in `dark-pattern-detector-chrome-exten
 - [Data inventory](docs/data-inventory.md)
 - [Local event schema](docs/event-schema.md)
 - [Classifier evaluation plan](docs/classifier-evaluation.md)
+- [MVP quality checklist](docs/quality-checklist.md)
 - [Product roadmap](docs/roadmap.md)
 - [Research backlog](docs/backlog/research.md)
 - [Domain context](CONTEXT.md)

@@ -21,6 +21,22 @@
 - Implement the product consent gate and inspectable local data view.
 - Keep all screenshot and video permissions absent.
 
+## Product operating modes and priority
+
+1. **Observation and insights (default):** locally measure content signals, exposure buckets, and person feedback. This is the primary MVP and the future research-baseline path.
+2. **Personal protection (optional):** person-triggered actions such as Blur may help someone respond to a signal, but they are not part of the observational baseline and must never activate automatically.
+3. **Research (backlog):** a separately consented study mode. Observational studies should keep personal-protection actions disabled or record them as an explicit intervention variable.
+
+This ordering protects the core question: what patterns are observed in content exposure and self-reported outcomes? The product must not imply that a detection caused an outcome.
+
+## Phase 1B — Measurement and local insights (current priority)
+
+- [x] Aggregate local signals by category, session, and recorded hour.
+- [x] Explain the observation window, local-only scope, and deletion control.
+- [x] Add a short recent-hours category trend without displaying raw content.
+- [ ] Define an optional, separately consented wellbeing check-in model; do not infer mental state from browsing data.
+- [ ] Define a research-ready observational baseline where protective actions are disabled or measured separately.
+
 ## Tomorrow — focused implementation checklist
 
 The goal for the next work session is to strengthen the existing browser MVP before expanding its capture surface.
@@ -53,7 +69,7 @@ The goal for the next work session is to strengthen the existing browser MVP bef
 - [x] Show a local category-and-session summary from minimized events in the popup.
 - [x] Display the observation window and local-data scope beside every summary.
 - [x] Make insufficient-data states explicit instead of implying a conclusion.
-- [ ] Keep all calculations local and make the result deletable.
+- [x] Keep all calculations local and make the result deletable.
 
 ### 5. Defer intentionally
 
@@ -84,13 +100,13 @@ The goal for the next work session is to strengthen the existing browser MVP bef
 - Process the capture locally and delete raw media after analysis.
 - Show a visible capture state and result explanation.
 
-## Phase 3 — Safety actions and quality
+## Phase 3 — Optional personal-protection actions and quality
 
 - [x] Add a person-controlled, reversible blur action for extension-highlighted text.
-- [ ] Add hide/mute controls only where platform capabilities and reversibility are clear.
+- [ ] Do not expand hide/mute controls until their platform scope, reversibility, and effect on observational data are clear.
 - [x] Add confidence-aware explanations that describe local rules or heuristics as advisory candidates.
-- Create labeled evaluation fixtures and regression tests.
-- Add accessibility, performance, and failure-mode testing.
+- [x] Create labeled development fixtures and regression tests for every configured category.
+- [x] Add an MVP accessibility, performance, and failure-mode test checklist.
 
 ## Phase 4 — Research readiness (backlog)
 

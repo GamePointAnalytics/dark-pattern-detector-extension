@@ -20,6 +20,8 @@
 
 `dark-pattern-detector-chrome-extension/fixtures/detection-context-cases.json` is the small, labeled development fixture set for deterministic text detection. It includes positive purchase-language examples plus known false-positive contexts such as navigation, footer, explicit negation, and quoted design guidance. It is run by `test_detector_core.js`.
 
+Run `evaluate_detector.js` to print per-category precision and recall against this fixture set. The output is a development smoke signal, not a performance claim: fixtures are small and intentionally used during rule tuning.
+
 This fixture set is for fast development regression only. A later evaluation set must remain separate from the examples used to tune rules.
 
 ## Product behavior

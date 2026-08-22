@@ -8,6 +8,11 @@ const contextCases = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures',
 
 assert.equal(patterns.length, 13, 'all configured categories should load');
 assert.deepEqual(
+    core.splitKeywords('to cancel.{0,10}call, call to cancel'),
+    ['to cancel.{0,10}call', 'call to cancel'],
+    'commas inside a regex range must remain part of the configured pattern'
+);
+assert.deepEqual(
     core.findMatchingPatterns({
         text: 'Hurry! Offer ends in 10 minutes!',
         patterns,
@@ -47,6 +52,13 @@ contextCases.forEach(testCase => {
         core.findMatchingPatterns({ text: testCase.text, context: testCase.context, patterns, element: testCase.element }).map(pattern => pattern.type),
         testCase.expectedTypes,
         testCase.name
+    );
+});
+
+patterns.forEach(pattern => {
+    assert.ok(
+        contextCases.some(testCase => testCase.expectedTypes.includes(pattern.type)),
+        `the development fixture set should include a positive example for ${pattern.type}`
     );
 });
 

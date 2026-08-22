@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const patternCountSpan = document.getElementById('patternCount');
     const historyStatus = document.getElementById('historyStatus');
     const insightsStatus = document.getElementById('insightsStatus');
+    const insightsTrend = document.getElementById('insightsTrend');
     let observationState = 'inactive';
     let feedbackByEventId = {};
 
@@ -52,6 +53,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const insights = await chrome.runtime.sendMessage({ action: 'getLocalInsights' });
             if (!insights.eventCount) {
                 insightsStatus.textContent = 'No local insight yet — scan a supported page to create your first local signal.';
+                insightsTrend.textContent = '';
                 return;
             }
 
@@ -61,8 +63,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             const sessions = insights.sessionCount === 1 ? '1 session' : `${insights.sessionCount} sessions`;
             const recordedHours = insights.timeBucketCount === 1 ? '1 recorded hour' : `${insights.timeBucketCount || 0} recorded hours`;
             insightsStatus.textContent = `Local summary: ${insights.eventCount} signals across ${sessions}${categories ? ` — ${categories}` : ''}. Observation window: ${recordedHours}. Stored on this device; Delete Local History removes it.`;
+            const recentHours = (insights.recentHours || []).map((hour, index) => {
+                const position = index === 0 ? 'Latest' : `Earlier ${index}`;
+                const categorySummary = hour.topCategories.map(item => `${item.category} (${item.count})`).join(' · ');
+                const signalLabel = hour.count === 1 ? 'signal' : 'signals';
+                return `${position}: ${hour.count} ${signalLabel}${categorySummary ? ` — ${categorySummary}` : ''}`;
+            });
+            insightsTrend.textContent = recentHours.length ? `Recent recorded hours: ${recentHours.join('; ')}.` : '';
         } catch (_) {
             insightsStatus.textContent = 'Local insight is unavailable.';
+            insightsTrend.textContent = '';
         }
     }
 

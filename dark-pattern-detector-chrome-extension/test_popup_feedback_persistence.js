@@ -38,7 +38,7 @@ function descendants(element) {
 }
 
 function createPopup(feedbackById) {
-    const ids = ['scanBtn', 'startBtn', 'pauseBtn', 'deleteHistoryBtn', 'status', 'patternCount', 'historyStatus', 'insightsStatus', 'patternsList', 'modeBadge', 'toggleVisual'];
+    const ids = ['scanBtn', 'startBtn', 'pauseBtn', 'deleteHistoryBtn', 'status', 'patternCount', 'historyStatus', 'insightsStatus', 'insightsTrend', 'patternsList', 'modeBadge', 'toggleVisual'];
     const elements = Object.fromEntries(ids.map(id => [id, new Element(id)]));
     const domListeners = {};
     const tabMessages = [];
@@ -76,7 +76,13 @@ function createPopup(feedbackById) {
             sendMessage: async request => {
                 if (request.action === 'getLocalHistorySummary') return { count: 1 };
                 if (request.action === 'getLocalInsights') {
-                    return { eventCount: 1, sessionCount: 1, timeBucketCount: 1, topCategories: [{ category: 'Urgency', count: 1 }] };
+                    return {
+                        eventCount: 1,
+                        sessionCount: 1,
+                        timeBucketCount: 1,
+                        topCategories: [{ category: 'Urgency', count: 1 }],
+                        recentHours: [{ bucket: '2026-08-22T12:00:00.000Z', count: 1, topCategories: [{ category: 'Urgency', count: 1 }] }]
+                    };
                 }
                 if (request.action === 'updateLocalEventFeedback') {
                     request.eventIds.forEach(id => feedbackById.set(id, 'not_relevant'));
@@ -101,7 +107,8 @@ function createPopup(feedbackById) {
         safetyButton() { return descendants(elements.patternsList).find(el => el.className === 'safety-btn'); },
         explanationText() { return descendants(elements.patternsList).find(el => el.className === 'pattern-explanation')?.textContent; },
         tabMessages,
-        insightsText() { return elements.insightsStatus.textContent; }
+        insightsText() { return elements.insightsStatus.textContent; },
+        insightsTrendText() { return elements.insightsTrend.textContent; }
     };
 }
 
@@ -110,6 +117,7 @@ function createPopup(feedbackById) {
     const firstPopup = createPopup(feedbackById);
     await firstPopup.open();
     assert.match(firstPopup.insightsText(), /Local summary: 1 signals across 1 session — Urgency \(1\)\. Observation window: 1 recorded hour\. Stored on this device; Delete Local History removes it\./);
+    assert.equal(firstPopup.insightsTrendText(), 'Recent recorded hours: Latest: 1 signal — Urgency (1).');
     assert.equal(firstPopup.explanationText(), 'Matched a configured local text rule. Review and correct it if it does not fit this page.');
     assert.equal(firstPopup.safetyButton().textContent, 'Blur', 'a detection should offer a reversible blur action');
     await firstPopup.safetyButton().trigger('click');
