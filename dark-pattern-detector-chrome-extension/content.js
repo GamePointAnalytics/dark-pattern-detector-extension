@@ -19,27 +19,15 @@ let PATTERNS = [];
 // nodes. Cleared on full scans.
 const evaluatedTextNodes = new WeakSet();
 
-// Common benign patterns to ignore (legalese, footers, etc.)
-// NOTE: these use the `g` flag and are reused across calls. RegExp.test() with
-// the `g` flag retains lastIndex, so we MUST reset lastIndex before each call
-// (see usage in findCandidates) to avoid intermittent false-negatives.
-const IGNORED_PATTERNS = [
-    /all rights reserved/gi,
-    /privacy policy/gi,
-    /terms (of|and) (use|service|conditions)/gi,
-    /copyright/gi,
-    /trademarks?/gi,
-    /\d+-star prices/gi,
-    /responsible for content/gi,
-    /mobile app/gi
-];
-
 // Detection state
 let detectionResults = [];
 let isScanning = false;
 let hasScanned = false;
 let isPaused = false;
 let visualEnabled = false;
+let observationActive = false;
+let sessionId = null;
+let observer = null;
 
 // --- Optional AI (Gemini Nano) state ---
 // nanoStatus: 'unknown' | 'available' | 'unavailable'
@@ -48,10 +36,64 @@ let lastScanUsedNano = false;     // did any Nano verification actually run in t
 let pendingVerifications = 0;     // outstanding verify requests for the current scan
 const MAX_NANO_VERIFICATIONS = 12; // bound LLM cost per scan
 
-// Initialize Pause State
-chrome.storage.local.get(['isPaused'], (result) => {
-    isPaused = result.isPaused || false;
-});
+function createId(prefix) {
+    if (crypto && typeof crypto.randomUUID === 'function') {
+        return `${prefix}-${crypto.randomUUID()}`;
+    }
+    return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function currentHourBucket() {
+    const now = new Date();
+    now.setMinutes(0, 0, 0);
+    return now.toISOString();
+}
+
+function getObservationState() {
+    if (!observationActive) return 'inactive';
+    return isPaused ? 'paused' : 'active';
+}
+
+function createLocalEvent(detectionId, type, detector) {
+    return {
+        schemaVersion: '0.1',
+        eventId: detectionId,
+        occurredAtBucket: currentHourBucket(),
+        sessionId: sessionId || createId('session'),
+        source: {
+            surface: 'browser_tab',
+            platformType: 'unknown',
+            captureMode: 'dom_text'
+        },
+        exposure: {
+            durationSeconds: 0,
+            contentServingCount: 1
+        },
+        signals: [{
+            category: type,
+            subtype: null,
+            confidence: detector === 'regex' ? 1 : 0.7,
+            detector,
+            modelVersion: detector === 'regex' ? 'patterns-v3' : 'visual-heuristic-v3'
+        }],
+        feedback: {
+            relevance: 'unknown',
+            wantedness: 'unknown',
+            safetyAction: 'none'
+        },
+        privacy: {
+            rawCaptureDeleted: true,
+            ocrTextDeleted: true,
+            researchExportEligible: false
+        }
+    };
+}
+
+function persistLocalEvents(events) {
+    if (events.length === 0) return Promise.resolve();
+    return chrome.runtime.sendMessage({ action: 'recordLocalEvents', events })
+        .catch(error => console.debug('[DarkPatternDetector] Could not record local events:', error));
+}
 
 // --- Pattern loading ---
 
@@ -60,7 +102,10 @@ async function loadPatterns() {
         const url = chrome.runtime.getURL('patterns.txt');
         const response = await fetch(url);
         const text = await response.text();
-        PATTERNS = parsePatterns(text);
+        if (!globalThis.DarkPatternDetectorCore) {
+            throw new Error('Detector core was not loaded.');
+        }
+        PATTERNS = globalThis.DarkPatternDetectorCore.parsePatterns(text);
         console.log(`[DarkPatternDetector] Loaded ${PATTERNS.length} categories from patterns.txt`);
     } catch (e) {
         if (e.message.includes('Failed to fetch') || !chrome.runtime?.id) {
@@ -69,51 +114,6 @@ async function loadPatterns() {
             console.error("[DarkPatternDetector] Failed to load patterns.txt:", e);
         }
     }
-}
-
-// Parse the text file format: [Category Name] followed by comma-separated keywords
-function parsePatterns(text) {
-    const lines = text.split('\n');
-    const categories = [];
-    let currentCategory = null;
-    let keywords = [];
-
-    lines.forEach(line => {
-        line = line.trim();
-        if (!line || line.startsWith('#')) return; // Skip comments/empty
-
-        const categoryMatch = line.match(/^\[(.*)\]$/);
-        if (categoryMatch) {
-            if (currentCategory) {
-                categories.push(createPatternObject(currentCategory, keywords));
-            }
-            currentCategory = categoryMatch[1];
-            keywords = [];
-        } else {
-            const parts = line.split(',').map(p => p.trim()).filter(p => p.length > 0);
-            keywords.push(...parts);
-        }
-    });
-
-    if (currentCategory) {
-        categories.push(createPatternObject(currentCategory, keywords));
-    }
-
-    return categories;
-}
-
-// Build the regex object. Keyword fragments are raw regex parts (e.g. \d+); we
-// trust the patterns.txt author. Word boundaries reduce false matches.
-function createPatternObject(type, keywordList) {
-    const broadPattern = `\\b(${keywordList.join('|')})\\b`;
-    return {
-        type: type,
-        broadRegex: new RegExp(broadPattern, 'gi'),
-        // Strict fallback is the same as broad in this simple text format; the
-        // AI layer (when available) does the precision refinement.
-        strictRegex: new RegExp(broadPattern, 'gi'),
-        message: `Potential ${type} pattern detected.`
-    };
 }
 
 const patternsLoadedPromise = loadPatterns();
@@ -180,8 +180,9 @@ function resolveBackground(el) {
  * @param {boolean} incremental if true, do not reset detectionResults (mutation scan)
  */
 async function scanAndHighlight(roots, incremental = false) {
-    if (isScanning) return;
+    if (!observationActive || isPaused || isScanning) return;
     isScanning = true;
+    const localEvents = [];
 
     if (!incremental) {
         detectionResults = [];
@@ -201,10 +202,17 @@ async function scanAndHighlight(roots, incremental = false) {
         // reflects the whole page (highlights may persist across scans).
         if (!incremental) {
             document.querySelectorAll('.safe-web-highlight').forEach(el => {
+                const detectionId = el.dataset.safeWebDetectionId || createId('detection');
+                const type = el.dataset.safeWebType || "Unknown";
+                el.dataset.safeWebDetectionId = detectionId;
                 detectionResults.push({
-                    type: el.dataset.safeWebType || "Unknown",
+                    detectionId,
+                    type,
                     text: (el.textContent || "").substring(0, 50)
                 });
+                // Re-submit existing highlights. The background deduplicates by
+                // detection ID, while a just-cleared history is repopulated.
+                localEvents.push(createLocalEvent(detectionId, type, 'regex'));
             });
         }
 
@@ -228,35 +236,25 @@ async function scanAndHighlight(roots, incremental = false) {
                 if (!content || content.trim().length < 3) return;
                 if (!isVisible(parent)) return;
 
-                // Benign-content filter — reset lastIndex on these global regexes
-                for (const ignorePattern of IGNORED_PATTERNS) {
-                    ignorePattern.lastIndex = 0;
-                    if (ignorePattern.test(content)) return;
-                }
-
-                PATTERNS.forEach(pattern => {
-                    // Restrict Curiosity Gap to titles, headings, or links
-                    if (pattern.type === 'Curiosity Gap') {
-                        const tagName = parent.tagName || '';
-                        const className = (typeof parent.className === 'string') ? parent.className.toLowerCase() : '';
-                        const isHeading = ['H1', 'H2', 'H3', 'H4', 'H5', 'H6'].includes(tagName);
-                        const isTitleClass = className.includes('title') || className.includes('headline') || className.includes('heading') || className.includes('article');
-                        const isLink = tagName === 'A';
-                        if (!isHeading && !isTitleClass && !isLink) return;
-                    }
-
-                    pattern.broadRegex.lastIndex = 0;
-                    if (pattern.broadRegex.test(content)) {
-                        // Build surrounding context using textContent (cheap — innerText
-                        // forces a layout reflow which is expensive per candidate).
-                        let context = content;
-                        if (parent.textContent) {
-                            context = parent.textContent.replace(/\s+/g, ' ').trim();
-                            if (context.length > 300) context = context.substring(0, 300) + "...";
-                        }
-                        candidates.push({ node, content, context, pattern });
+                const matchingPatterns = globalThis.DarkPatternDetectorCore.findMatchingPatterns({
+                    text: content,
+                    patterns: PATTERNS,
+                    element: {
+                        tagName: parent.tagName || '',
+                        className: typeof parent.className === 'string' ? parent.className : ''
                     }
                 });
+
+                if (matchingPatterns.length > 0) {
+                    // Build surrounding context using textContent (cheap — innerText
+                    // forces a layout reflow which is expensive per candidate).
+                    let context = content;
+                    if (parent.textContent) {
+                        context = parent.textContent.replace(/\s+/g, ' ').trim();
+                        if (context.length > 300) context = context.substring(0, 300) + "...";
+                    }
+                    matchingPatterns.forEach(pattern => candidates.push({ node, content, context, pattern }));
+                }
 
                 evaluatedTextNodes.add(node);
             } else if (node.nodeType === 1 && node.childNodes &&
@@ -276,13 +274,16 @@ async function scanAndHighlight(roots, incremental = false) {
         candidates.forEach(candidate => {
             candidate.pattern.strictRegex.lastIndex = 0;
             if (candidate.pattern.strictRegex.test(candidate.content)) {
-                const span = highlightTextNode(candidate.node, candidate.pattern);
+                const detectionId = createId('detection');
+                const span = highlightTextNode(candidate.node, candidate.pattern, null, detectionId);
                 found = true;
                 detectionResults.push({
+                    detectionId,
                     type: candidate.pattern.type,
                     text: candidate.content.substring(0, 50),
                     aiScore: "Regex"
                 });
+                localEvents.push(createLocalEvent(detectionId, candidate.pattern.type, 'regex'));
 
                 // Optional, non-blocking Nano verification. Only send a bounded
                 // number per scan and stop if Nano is known unavailable.
@@ -297,18 +298,24 @@ async function scanAndHighlight(roots, incremental = false) {
         if (visualEnabled) {
             const visualCandidates = checkVisualInterference();
             visualCandidates.forEach(cand => {
+                const detectionId = cand.node.dataset.safeWebDetectionId || createId('detection');
+                cand.node.dataset.safeWebDetectionId = detectionId;
                 cand.node.style.border = "2px solid #ff9800";
                 cand.node.style.boxShadow = "0 0 5px #ff9800";
                 cand.node.title = "Dark Pattern: Visual Interference (False Hierarchy)";
                 found = true;
                 detectionResults.push({
+                    detectionId,
                     type: "Visual Interference",
                     text: cand.text.substring(0, 50),
                     aiScore: "Heuristic"
                 });
+                localEvents.push(createLocalEvent(detectionId, 'Visual Interference', 'heuristic'));
             });
             console.log(`[DarkPatternDetector] Found ${visualCandidates.length} visual interference patterns`);
         }
+
+        await persistLocalEvents(localEvents);
 
         return found;
     } catch (err) {
@@ -336,6 +343,7 @@ function notifyResultsReady() {
             count: detectionResults.length,
             results: detectionResults,
             hasScanned: true,
+            sessionState: getObservationState(),
             mode: lastScanUsedNano && nanoStatus === 'available' ? "AI-verified" : "Regex only"
         });
     } catch (e) {
@@ -347,7 +355,7 @@ function notifyResultsReady() {
  * Highlight a text node with the dark pattern warning. Returns the created span
  * (or null) so callers can later un-highlight it if Nano disagrees.
  */
-function highlightTextNode(textNode, pattern, aiResult) {
+function highlightTextNode(textNode, pattern, aiResult, detectionId) {
     if (!textNode || !textNode.parentNode) {
         console.debug("[DarkPatternDetector] Skipping highlight - node detached");
         return null;
@@ -355,6 +363,7 @@ function highlightTextNode(textNode, pattern, aiResult) {
     const span = document.createElement('span');
     span.className = 'safe-web-highlight';
     span.dataset.safeWebType = pattern.type;
+    span.dataset.safeWebDetectionId = detectionId || createId('detection');
 
     let title = `Dark Pattern: ${pattern.type}\n${pattern.message}`;
     if (aiResult && aiResult.score) {
@@ -375,10 +384,7 @@ function unhighlight(span) {
     const text = document.createTextNode(span.textContent || '');
     span.parentNode.replaceChild(text, span);
     // Remove this entry from detectionResults
-    const idx = detectionResults.findIndex(r =>
-        r.aiScore === 'Regex' && r.type === span.dataset.safeWebType &&
-        r.text === (span.textContent || '').substring(0, 50)
-    );
+    const idx = detectionResults.findIndex(r => r.detectionId === span.dataset.safeWebDetectionId);
     if (idx !== -1) detectionResults.splice(idx, 1);
 }
 
@@ -431,6 +437,7 @@ function getResults() {
     if (detectionResults.length === 0) {
         document.querySelectorAll('.safe-web-highlight').forEach(el => {
             detectionResults.push({
+                detectionId: el.dataset.safeWebDetectionId || createId('detection'),
                 type: el.dataset.safeWebType || "Unknown",
                 text: (el.textContent || "").substring(0, 50)
             });
@@ -441,6 +448,7 @@ function getResults() {
         results: detectionResults,
         isScanning: isScanning,
         hasScanned: hasScanned,
+        sessionState: getObservationState(),
         mode: lastScanUsedNano && nanoStatus === 'available' ? "AI-verified" : "Regex only"
     };
 }
@@ -448,21 +456,36 @@ function getResults() {
 // --- Message listeners ---
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === "scan") {
-        if (!isPaused) {
+    if (request.action === "startObservation") {
+        observationActive = true;
+        isPaused = false;
+        sessionId = sessionId || createId('session');
+        chrome.storage.local.set({ isPaused: false });
+        ensureObserver();
+        scanAndHighlight(document.body, false);
+        sendResponse({ sessionState: getObservationState() });
+        return false;
+    } else if (request.action === "scan") {
+        if (observationActive && !isPaused) {
             scanAndHighlight(document.body, false);
         } else {
-            alert("Detection is paused. Click 'Resume Detection' in the extension popup to scan.");
+            alert("Observation is not active. Click 'Start Observation' in the extension popup.");
         }
-        sendResponse({ isScanning: true });
+        sendResponse({ isScanning: isScanning, sessionState: getObservationState() });
         return false;
     } else if (request.action === "getResults") {
         sendResponse(getResults());
     } else if (request.action === "togglePause") {
         isPaused = request.isPaused;
+        observationActive = true;
+        chrome.storage.local.set({ isPaused });
         if (!isPaused) {
+            sessionId = sessionId || createId('session');
+            ensureObserver();
             scanAndHighlight(document.body, false);
         }
+        sendResponse({ sessionState: getObservationState() });
+        return false;
     }
 });
 
@@ -478,8 +501,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 let scanTimeout = null;
 const pendingMutationRoots = new Set();
 
-const observer = new MutationObserver((mutations) => {
-    if (isPaused || isScanning) return;
+observer = new MutationObserver((mutations) => {
+    if (!observationActive || isPaused || isScanning) return;
 
     mutations.forEach(m => {
         if (m.type === 'childList') {
@@ -505,6 +528,12 @@ const observer = new MutationObserver((mutations) => {
     }, 750);
 });
 
+function ensureObserver() {
+    if (observer && document.body) {
+        observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    }
+}
+
 // --- Unified initialization ---
 Promise.all([
     patternsLoadedPromise,
@@ -512,13 +541,10 @@ Promise.all([
 ]).then(([_, config]) => {
     isPaused = config.isPaused || false;
     visualEnabled = config.visualEnabled || false;
+    observationActive = false;
 
-    console.log(`[DarkPatternDetector] Initialized. Visual: ${visualEnabled}, Paused: ${isPaused}`);
+    console.log(`[DarkPatternDetector] Initialized. Visual: ${visualEnabled}, Observation: ${getObservationState()}`);
 
-    if (!isPaused && document.body) {
-        observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-        scanAndHighlight(document.body, false);
-    }
 });
 
 /**
@@ -603,4 +629,4 @@ function checkVisualInterference() {
     return results;
 }
 
-console.log("[DarkPatternDetector] Content script loaded (regex core + optional Nano)");
+console.log("[DarkPatternDetector] Content script loaded (detector core + optional Nano)");

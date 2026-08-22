@@ -4,8 +4,14 @@
 
 document.addEventListener('DOMContentLoaded', async () => {
     const scanBtn = document.getElementById('scanBtn');
+    const startBtn = document.getElementById('startBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const deleteHistoryBtn = document.getElementById('deleteHistoryBtn');
     const statusDiv = document.getElementById('status');
     const patternCountSpan = document.getElementById('patternCount');
+    const historyStatus = document.getElementById('historyStatus');
+    let observationState = 'inactive';
+    let feedbackByEventId = {};
 
     // Get current tab
     async function getCurrentTab() {
@@ -13,14 +19,80 @@ document.addEventListener('DOMContentLoaded', async () => {
         return tab;
     }
 
+    async function sendToCurrentTab(message) {
+        const tab = await getCurrentTab();
+        if (!tab?.id) return { delivered: false };
+
+        try {
+            return { delivered: true, response: await chrome.tabs.sendMessage(tab.id, message) };
+        } catch (error) {
+            // Chrome's own pages and a page that has not been refreshed after an
+            // extension reload do not have a content-script receiver.
+            if (error?.message?.includes('Receiving end does not exist')) {
+                return { delivered: false };
+            }
+            throw error;
+        }
+    }
+
+    async function refreshLocalHistory() {
+        try {
+            const summary = await chrome.runtime.sendMessage({ action: 'getLocalHistorySummary' });
+            historyStatus.textContent = `${summary.count || 0} stored`;
+        } catch (_) {
+            historyStatus.textContent = 'Unavailable';
+        }
+    }
+
+    async function refreshFeedbackState(results) {
+        const eventIds = (results || []).map(result => result.detectionId).filter(Boolean);
+        if (eventIds.length === 0) {
+            feedbackByEventId = {};
+            return;
+        }
+
+        try {
+            const response = await chrome.runtime.sendMessage({ action: 'getLocalEventFeedback', eventIds });
+            feedbackByEventId = response?.feedbackByEventId || {};
+        } catch (_) {
+            feedbackByEventId = {};
+        }
+    }
+
+    function updateObservationControls(state) {
+        observationState = state || observationState;
+        const inactive = observationState === 'inactive';
+        const paused = observationState === 'paused';
+        const active = observationState === 'active';
+
+        startBtn.disabled = active;
+        startBtn.style.opacity = active ? '0.5' : '1';
+        pauseBtn.disabled = inactive;
+        pauseBtn.style.opacity = inactive ? '0.5' : '1';
+        scanBtn.disabled = !active;
+        scanBtn.style.opacity = active ? '1' : '0.5';
+
+        if (paused) {
+            pauseBtn.textContent = 'Resume Observation';
+            pauseBtn.style.background = '#4caf50';
+            pauseBtn.style.color = 'white';
+        } else {
+            pauseBtn.textContent = 'Pause Observation';
+            pauseBtn.style.background = '#f0f0f0';
+            pauseBtn.style.color = '#333';
+        }
+    }
+
     // Update UI with results
-    function updateUI(data) {
+    async function updateUI(data) {
         if (!data) {
             statusDiv.textContent = "No data";
             return;
         }
 
         const count = data.count || 0;
+        await refreshFeedbackState(data.results);
+        updateObservationControls(data.sessionState);
         patternCountSpan.textContent = count;
         const patternsList = document.getElementById('patternsList');
         patternsList.innerHTML = '';
@@ -60,19 +132,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                 data.results.forEach(r => {
                     if (!details[r.type]) details[r.type] = {};
 
-                    // Count occurrences of each specific text
+                    // Keep IDs so feedback can update only the matching local events.
                     if (!details[r.type][r.text]) {
-                        details[r.type][r.text] = 1;
-                    } else {
-                        details[r.type][r.text]++;
+                        details[r.type][r.text] = [];
                     }
+                    if (r.detectionId) details[r.type][r.text].push(r.detectionId);
                 });
             }
 
             // Display breakdown with Details
             Object.entries(details).forEach(([type, textCounts]) => {
                 // Calculate total patterns for this type (sum of all frequencies)
-                const totalForType = Object.values(textCounts).reduce((a, b) => a + b, 0);
+                const totalForType = Object.values(textCounts).reduce((total, ids) => total + ids.length, 0);
 
                 const detailsEl = document.createElement('details');
                 detailsEl.className = 'pattern-group';
@@ -89,17 +160,50 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const ul = document.createElement('ul');
                 ul.className = 'pattern-list';
 
-                Object.entries(textCounts).forEach(([text, count]) => {
+                Object.entries(textCounts).forEach(([text, detectionIds]) => {
                     const li = document.createElement('li');
+                    const label = document.createElement('span');
+                    label.className = 'pattern-label';
+                    const count = detectionIds.length;
 
                     if (count > 1) {
-                        // Show count if > 1, e.g., "Limited time (x5)"
-                        li.textContent = `"${text}" (x${count})`;
+                        label.textContent = `"${text}" (x${count})`;
                     } else {
-                        li.textContent = `"${text}"`;
+                        label.textContent = `"${text}"`;
                     }
 
                     li.title = text; // Tooltip for full text
+                    li.appendChild(label);
+                    if (detectionIds.length > 0) {
+                        const feedbackBtn = document.createElement('button');
+                        feedbackBtn.className = 'feedback-btn';
+                        const alreadyMarked = detectionIds.every(id => feedbackByEventId[id]?.relevance === 'not_relevant');
+                        feedbackBtn.textContent = alreadyMarked ? 'Marked' : 'Not relevant';
+                        feedbackBtn.disabled = alreadyMarked;
+                        feedbackBtn.title = 'Mark this detection as a false positive in local history';
+                        feedbackBtn.addEventListener('click', async () => {
+                            feedbackBtn.disabled = true;
+                            try {
+                                const response = await chrome.runtime.sendMessage({
+                                    action: 'updateLocalEventFeedback',
+                                    eventIds: detectionIds,
+                                    feedback: { relevance: 'not_relevant' }
+                                });
+                                if (response?.updated) {
+                                    detectionIds.forEach(id => {
+                                        feedbackByEventId[id] = { relevance: 'not_relevant' };
+                                    });
+                                    feedbackBtn.textContent = 'Marked';
+                                } else {
+                                    feedbackBtn.textContent = 'History cleared';
+                                }
+                            } catch (_) {
+                                feedbackBtn.textContent = 'Try again';
+                                feedbackBtn.disabled = false;
+                            }
+                        });
+                        li.appendChild(feedbackBtn);
+                    }
                     ul.appendChild(li);
                 });
                 detailsEl.appendChild(ul);
@@ -116,7 +220,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             statusDiv.className = "status";
             patternCountSpan.textContent = message.found || 0;
         } else if (message.action === "resultsReady") {
-            updateUI(message);
+            void updateUI(message);
+            refreshLocalHistory();
+        }
+    });
+
+    startBtn.addEventListener('click', async () => {
+        const tab = await getCurrentTab();
+        if (!tab?.id) return;
+
+        try {
+            const response = await chrome.tabs.sendMessage(tab.id, { action: 'startObservation' });
+            updateObservationControls(response.sessionState);
+            statusDiv.textContent = 'Scanning...';
+            statusDiv.className = 'status scanning';
+        } catch (_) {
+            statusDiv.textContent = 'Cannot start on this page';
+            statusDiv.className = 'status warning';
         }
     });
 
@@ -155,63 +275,39 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 }
             } else {
-                updateUI(response);
+                await updateUI(response);
             }
         }
     } catch (e) {
         statusDiv.textContent = "Refresh page to scan";
         statusDiv.className = "status";
     }
-    // Pause button handler
-    const pauseBtn = document.getElementById('pauseBtn');
+    pauseBtn.addEventListener('click', async () => {
+        const tab = await getCurrentTab();
+        if (!tab?.id || observationState === 'inactive') return;
 
-    // Initialize Pause button state
-    chrome.storage.local.get(['isPaused'], (result) => {
-        updatePauseButton(result.isPaused);
+        const nextPaused = observationState !== 'paused';
+        try {
+            const response = await chrome.tabs.sendMessage(tab.id, {
+                action: 'togglePause',
+                isPaused: nextPaused
+            });
+            updateObservationControls(response.sessionState);
+            statusDiv.textContent = nextPaused ? 'Observation Paused' : 'Scanning...';
+            statusDiv.className = nextPaused ? 'status warning' : 'status scanning';
+        } catch (_) {
+            statusDiv.textContent = 'Cannot update this page';
+            statusDiv.className = 'status warning';
+        }
     });
 
-    function updatePauseButton(isPaused) {
-        if (isPaused) {
-            pauseBtn.textContent = "Resume Detection";
-            pauseBtn.style.background = "#4caf50"; // Green for resume
-            pauseBtn.style.color = "white";
-            statusDiv.textContent = "Detection Paused";
-            statusDiv.className = "status warning";
-            scanBtn.disabled = true;
-            scanBtn.style.opacity = "0.5";
-        } else {
-            pauseBtn.textContent = "Pause Detection";
-            pauseBtn.style.background = "#f0f0f0";
-            pauseBtn.style.color = "#333";
-            scanBtn.disabled = false;
-            scanBtn.style.opacity = "1";
+    deleteHistoryBtn.addEventListener('click', async () => {
+        try {
+            const response = await chrome.runtime.sendMessage({ action: 'clearLocalHistory' });
+            historyStatus.textContent = response.cleared ? '0 stored' : 'Delete failed';
+        } catch (_) {
+            historyStatus.textContent = 'Delete failed';
         }
-    }
-
-    pauseBtn.addEventListener('click', async () => {
-        // Toggle state
-        chrome.storage.local.get(['isPaused'], async (result) => {
-            const newState = !result.isPaused;
-
-            // Save state
-            await chrome.storage.local.set({ isPaused: newState });
-            updatePauseButton(newState);
-
-            // Notify active tab
-            const tab = await getCurrentTab();
-            if (tab?.id) {
-                // If resuming, show scanning status immediately
-                if (!newState) { // newState is false means NOT paused -> Scanning
-                    statusDiv.textContent = "Scanning...";
-                    statusDiv.className = "status";
-                }
-
-                chrome.tabs.sendMessage(tab.id, {
-                    action: "togglePause",
-                    isPaused: newState
-                });
-            }
-        });
     });
     // Visual Interference Toggle Handler
     const toggleVisual = document.getElementById('toggleVisual');
@@ -227,14 +323,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             await chrome.storage.local.set({ visualEnabled: newState });
 
             // Notify active tab to update immediately
-            const tab = await getCurrentTab();
-            if (tab?.id) {
-                chrome.tabs.sendMessage(tab.id, {
-                    action: "updateConfig",
-                    visualEnabled: newState
-                });
+            const result = await sendToCurrentTab({
+                action: "updateConfig",
+                visualEnabled: newState
+            });
+            if (!result.delivered) {
+                statusDiv.textContent = 'Preference saved — open a web page to apply it';
+                statusDiv.className = 'status scanning';
             }
         });
     }
+
+    updateObservationControls(observationState);
+    refreshLocalHistory();
 
 });

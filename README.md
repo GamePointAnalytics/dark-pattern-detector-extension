@@ -1,55 +1,91 @@
 # Dark Pattern Detector
 
-**An AI-powered Chrome Extension that detects and highlights manipulative user interface designs (Dark Patterns) in real-time.**
+Privacy-focused Chrome extension that detects and highlights manipulative interface patterns while you browse.
 
-## Overview
+## Current implementation
 
-The **Dark Pattern Detector** helps users navigate the web safely by identifying deceptive design patterns designed to trick them into taking actions they didn't intend to (like buying insurance, signing up for a newsletter, or rushing a purchase).
+The extension is a Manifest V3 prototype built around a local-first detection pipeline:
 
-It uses a **Hybrid Detection Engine** combining:
-1.  **Broad Match Regex**: Instantly scans for 120+ suspicion keywords across 10 distinct categories.
-2.  **On-Device AI (TensorFlow.js)**: A sandboxed AI model (Universal Sentence Encoder) verifies the context of detected text to reduce false positives.
-3.  **Visibility Filters**: Ensures only text actually visible to the user is flagged.
+- Regex matching against configurable phrases in `patterns.txt`
+- 13 text categories, including urgency, scarcity, social proof, hidden costs, forced action, trick questions, click bait, and curiosity gaps
+- Optional visual-interference detection for weakly presented opposing actions such as a faint “Reject” button beside a prominent “Accept” button
+- Optional on-device Gemini Nano verification through Chrome’s Prompt API
+- Automatic scanning on page load and incremental scanning of dynamically added page content
+- Popup dashboard with counts, category details, pause/resume, and detection-mode status
 
-## Key Features
+When Gemini Nano is unavailable, the extension continues to work in regex-only mode. Website text is not sent to a project-operated cloud service.
 
-*   **Real-time Detection**: Scans pages automatically as you browse.
-*   **10 Detection Categories**:
-    *   **Urgency**: "Offer ends in 00:05:00!"
-    *   **Scarcity**: "Only 2 items left in stock."
-    *   **Social Proof**: "15 people are viewing this right now."
-    *   **Confirmshaming**: "No thanks, I like paying full price."
-    *   **Hidden Costs**: Unexpected fees revealed at checkout.
-    *   **Hidden Subscription**: Hard-to-cancel auto-renewals.
-    *   **Nagging**: Popups that won't go away.
-    *   **Obstruction**: Making it hard to delete accounts.
-    *   **Preselection**: Pre-checked newsletter boxes.
-    *   **Forced Action**: "Download the app to continue."
-*   **Privacy First**: **100% On-Device Processing.** No data is ever sent to a cloud server.
-*   **Visual Highlights**: Suspicious text is highlighted directly on the page.
-*   **Detailed Analytics**: Click the extension popup to see exactly *what* text triggered the alert and *why*.
+## Install locally
 
-## Installation (Developer Mode)
+1. Clone the repository:
 
-1.  Clone this repository:
-    ```bash
-    git clone https://github.com/GamePointAnalytics/dark-pattern-detector-extension.git
-    ```
-2.  Open Chrome and navigate to `chrome://extensions/`.
-3.  Enable **Developer mode** (toggle in the top right).
-4.  Click **Load unpacked**.
-5.  Select the `dark-pattern-detector-extension` folder from this repository.
-6.  The extension is now active! Visit any e-commerce site to test it out.
+   ```bash
+   git clone https://github.com/GamePointAnalytics/dark-pattern-detector.git
+   ```
 
-## Architecture
+2. Open `chrome://extensions` in Chrome.
+3. Enable **Developer mode**.
+4. Select **Load unpacked**.
+5. Choose the `dark-pattern-detector-chrome-extension` directory.
+6. Refresh any already-open tabs you want to scan.
 
-This extension is built on **Manifest V3** and utilizes a unique architecture to run AI models within the strict security constraints of modern browsers:
+The extension works without Gemini Nano. Experimental Chrome AI features must be enabled separately if you want optional AI verification; see the extension [README](dark-pattern-detector-chrome-extension/README.md) for current setup notes.
 
-*   **Content Script**: Scans the DOM for candidate text nodes.
-*   **Background Worker**: Acts as a router/controller.
-*   **Offscreen Document**: Bridges the communication gap between the background worker and the sandbox.
-*   **Sandboxed Iframe**: Hosts the **TensorFlow.js** runtime and the **Universal Sentence Encoder (USE)** model, allowing for safe execution of `unsafe-eval` code required by the WASM backend.
+## Project structure
+
+```text
+dark-pattern-detector-chrome-extension/
+├── content.js       DOM scanning, highlighting, heuristics, and AI requests
+├── patterns.txt     Detection categories and regex fragments
+├── popup.html/js    Extension dashboard and controls
+├── background.js    Service-worker router and offscreen lifecycle
+├── offscreen.js     Optional Gemini Nano integration
+├── styles.css       Highlight styles
+├── test_*.html      Manual test fixtures
+└── report/          Design and implementation notes
+```
+
+## Development and testing
+
+There is currently no build step or automated test suite. For basic validation:
+
+- Run `node --check` on the JavaScript files after edits.
+- Run `node dark-pattern-detector-chrome-extension/test_detector_core.js` to verify the pure text-detection module.
+- Load the extension unpacked in Chrome.
+- Use `test_page.html` and `test_context.html` to exercise regex detection and context handling.
+- Use `test_nano.html` only when testing Chrome’s optional built-in AI capability.
+
+Detection patterns can be edited directly in `dark-pattern-detector-chrome-extension/patterns.txt`; reload the extension and refresh the test page after changing them.
+
+## Current limitations
+
+- English-language patterns only
+- Regex matching can produce false positives for benign text
+- Visual analysis currently focuses on selected opposing-action button pairs
+- Rapidly changing single-page applications may not be scanned immediately
+- Gemini Nano availability depends on the Chrome version, device, flags, and model state
+- This is a prototype and should not be treated as a complete accessibility, safety, or legal compliance tool
+
+## Documentation
+
+- [Product direction research](docs/product-direction-research.md)
+- [Capture modes and consent spec](docs/capture-modes-and-consent.md)
+- [Legal and research readiness](docs/legal-readiness.md)
+- [Product frames](docs/product-frames.md)
+- [Threat model](docs/threat-model.md)
+- [Data inventory](docs/data-inventory.md)
+- [Local event schema](docs/event-schema.md)
+- [Classifier evaluation plan](docs/classifier-evaluation.md)
+- [Product roadmap](docs/roadmap.md)
+- [Research backlog](docs/backlog/research.md)
+- [Domain context](CONTEXT.md)
+- [Architecture decision: local-first analysis](docs/adr/0001-local-first-content-analysis.md)
+- [Architecture decision: user-controlled capture modes](docs/adr/0002-user-controlled-capture-modes.md)
+- [Extension documentation](dark-pattern-detector-chrome-extension/README.md)
+- [Walkthrough](dark-pattern-detector-chrome-extension/walkthrough.md)
+- [Implementation report](dark-pattern-detector-chrome-extension/report/dark_pattern_extension_report.md)
+- [Resources and references](dark-pattern-detector-chrome-extension/RESOURCES.md)
 
 ## License
 
-Distributed under the MIT License. See `LICENSE` for more information.
+The repository currently does not include a license file. Licensing should be added before distributing the project publicly.

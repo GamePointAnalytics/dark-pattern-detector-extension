@@ -38,6 +38,7 @@
         "<all_urls>"
       ],
       "js": [
+        "detector-core.js",
         "content.js"
       ],
       "css": [

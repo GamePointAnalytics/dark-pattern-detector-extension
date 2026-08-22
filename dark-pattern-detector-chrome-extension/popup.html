@@ -149,6 +149,13 @@
       transform: translateY(0);
     }
 
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+      transform: none;
+      box-shadow: none;
+    }
+
     .stats {
       margin-top: 12px;
       padding-top: 10px;
@@ -236,9 +243,32 @@
       border-left: 2px solid #e0e0e0;
       padding-left: 8px;
       margin-bottom: 2px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .pattern-label {
+      min-width: 0;
+      flex: 1;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+
+    button.feedback-btn {
+      width: auto;
+      flex: 0 0 auto;
+      padding: 3px 6px;
+      border-radius: 5px;
+      background: #f0f0f0;
+      color: #555;
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    button.feedback-btn:hover {
+      box-shadow: none;
     }
   </style>
 </head>
@@ -257,8 +287,10 @@
 
     <div id="status" class="status">Scanning...</div>
 
-    <button id="scanBtn">Scan Now</button>
+    <button id="startBtn">Start Observation</button>
+    <button id="scanBtn" style="margin-top: 8px;">Scan Current Page</button>
     <button id="pauseBtn" style="margin-top: 8px; background: #f0f0f0; color: #333;">Pause Detection</button>
+    <button id="deleteHistoryBtn" style="margin-top: 8px; background: #fff3e0; color: #7a4500;">Delete Local History</button>
 
     <div class="stats">
       <div id="patternsList"></div>
@@ -269,6 +301,10 @@
       <div class="stats-row">
         <span>Detection Mode:</span>
         <span id="modeBadge" class="badge regex">REGEX ONLY</span>
+      </div>
+      <div class="stats-row">
+        <span>Local events:</span>
+        <span id="historyStatus">0 stored</span>
       </div>
     </div>
   </div>
