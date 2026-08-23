@@ -12,8 +12,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     const historyStatus = document.getElementById('historyStatus');
     const insightsStatus = document.getElementById('insightsStatus');
     const insightsTrend = document.getElementById('insightsTrend');
+    const toggleVisual = document.getElementById('toggleVisual');
+    const toggleProtection = document.getElementById('toggleProtection');
+    const consentPanel = document.getElementById('consentPanel');
+    const consentCheckbox = document.getElementById('consentCheckbox');
+    const dataScopeEvents = document.getElementById('dataScopeEvents');
+    const analyzeActiveTabBtn = document.getElementById('analyzeActiveTabBtn');
+    const activeTabCapturePanel = document.getElementById('activeTabCapturePanel');
+    const confirmActiveTabCaptureBtn = document.getElementById('confirmActiveTabCaptureBtn');
+    const cancelActiveTabCaptureBtn = document.getElementById('cancelActiveTabCaptureBtn');
+    const activeTabCaptureStatus = document.getElementById('activeTabCaptureStatus');
     let observationState = 'inactive';
     let feedbackByEventId = {};
+    let personalProtectionEnabled = false;
+    let productConsentGranted = false;
+    let lastResultData = null;
+
+    const preferencesLoaded = new Promise(resolve => {
+        chrome.storage.local.get(['visualEnabled', 'personalProtectionEnabled', 'productConsentVersion'], result => {
+            if (toggleVisual) toggleVisual.checked = result.visualEnabled || false;
+            personalProtectionEnabled = result.personalProtectionEnabled || false;
+            if (toggleProtection) toggleProtection.checked = personalProtectionEnabled;
+            productConsentGranted = result.productConsentVersion === '1';
+            if (consentPanel) consentPanel.hidden = productConsentGranted;
+            if (consentCheckbox) consentCheckbox.checked = productConsentGranted;
+            resolve();
+        });
+    });
 
     // Get current tab
     async function getCurrentTab() {
@@ -34,6 +59,89 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return { delivered: false };
             }
             throw error;
+        }
+    }
+
+    function decodeCapturedImage(rawCapture) {
+        return new Promise((resolve, reject) => {
+            const image = new Image();
+            image.onload = () => {
+                const dimensions = { width: image.naturalWidth, height: image.naturalHeight };
+                image.src = '';
+                resolve(dimensions);
+            };
+            image.onerror = () => reject(new Error('The visible-tab image could not be decoded locally.'));
+            image.src = rawCapture;
+        });
+    }
+
+    async function recordActiveTabSignals(signals) {
+        if (!Array.isArray(signals) || signals.length === 0) return 0;
+        const event = {
+            eventId: crypto.randomUUID(),
+            occurredAtBucket: new Date().toISOString(),
+            sessionId: 'active-tab-once',
+            source: { surface: 'browser_tab', platformType: 'unknown', captureMode: 'active_tab' },
+            exposure: { durationSeconds: 0, contentServingCount: 1 },
+            signals: signals.map(signal => ({
+                category: signal.category,
+                confidence: signal.confidence,
+                detector: 'on-device-image-model',
+                modelVersion: 'chrome-prompt-image-v1'
+            })),
+            feedback: { relevance: 'unknown', wantedness: 'unknown', safetyAction: 'none' },
+            privacy: { rawCaptureDeleted: true, ocrTextDeleted: true, researchExportEligible: false }
+        };
+        const result = await chrome.runtime.sendMessage({ action: 'recordLocalEvents', events: [event] });
+        return result?.added ? signals.length : 0;
+    }
+
+    function summarizeActiveTabAnalysis(receipt, storedSignalCount) {
+        const { analysis } = receipt;
+        const captureReceipt = `Captured ${receipt.width}×${receipt.height} locally and discarded it.`;
+        if (analysis.status === 'unavailable') {
+            return `${captureReceipt} On-device image analysis is not available in this Chrome installation, so no image signal was stored.`;
+        }
+        if (analysis.status === 'failed') {
+            return `${captureReceipt} On-device image analysis could not run, so no image signal was stored.`;
+        }
+        if (!analysis.signals.length) {
+            return `${captureReceipt} The local model found no high-confidence supported category; no image signal was stored.`;
+        }
+        const labels = analysis.signals
+            .map(signal => globalThis.DarkPatternImageSignalCore?.labelFor(signal.category) || signal.category)
+            .join(' · ');
+        return `${captureReceipt} Stored ${storedSignalCount} minimized local image signal${storedSignalCount === 1 ? '' : 's'}: ${labels}.`;
+    }
+
+    async function runActiveDomAnalysis() {
+        const result = await sendToCurrentTab({ action: 'analyzeVisibleDom' });
+        if (!result.delivered || result.response?.error) {
+            return 'Rendered-page rules are unavailable for this tab.';
+        }
+        await updateUI(result.response);
+        const count = Number(result.response?.count) || 0;
+        return count === 1
+            ? 'Local page rules found 1 possible signal.'
+            : `Local page rules found ${count} possible signals.`;
+    }
+
+    async function showActiveTabModelStatus() {
+        activeTabCaptureStatus.textContent = 'Checking on-device image analysis…';
+        try {
+            const result = await chrome.runtime.sendMessage({ action: 'getActiveTabImageAnalysisStatus' });
+            const availability = result?.availability;
+            if (availability === 'available') {
+                activeTabCaptureStatus.textContent = 'On-device image analysis is ready. Capture remains one-time and local.';
+            } else if (availability === 'downloadable') {
+                activeTabCaptureStatus.textContent = 'On-device image analysis can download in Chrome. Capture may take longer the first time; no image is retained.';
+            } else if (availability === 'downloading') {
+                activeTabCaptureStatus.textContent = 'Chrome is downloading its on-device image model. Wait for it to finish, then capture.';
+            } else {
+                activeTabCaptureStatus.textContent = 'On-device image analysis is unavailable in this Chrome installation. You can still test capture-and-discard; no image signal will be saved.';
+            }
+        } catch (_) {
+            activeTabCaptureStatus.textContent = 'Could not check on-device image analysis. A capture will still be discarded if analysis is unavailable.';
         }
     }
 
@@ -62,7 +170,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 .join(' · ');
             const sessions = insights.sessionCount === 1 ? '1 session' : `${insights.sessionCount} sessions`;
             const recordedHours = insights.timeBucketCount === 1 ? '1 recorded hour' : `${insights.timeBucketCount || 0} recorded hours`;
-            insightsStatus.textContent = `Local summary: ${insights.eventCount} signals across ${sessions}${categories ? ` — ${categories}` : ''}. Observation window: ${recordedHours}. Stored on this device; Delete Local History removes it.`;
+            const observedMinutes = Math.max(0, Math.round((Number(insights.observedSeconds) || 0) / 60));
+            const observedTime = observedMinutes === 1 ? '1 minute observed' : `${observedMinutes} minutes observed`;
+            insightsStatus.textContent = `Local summary: ${insights.eventCount} signals across ${sessions}${categories ? ` — ${categories}` : ''}. Observation window: ${recordedHours}; ${observedTime}. Stored on this device; Delete Local History removes it.`;
             const recentHours = (insights.recentHours || []).map((hour, index) => {
                 const position = index === 0 ? 'Latest' : `Earlier ${index}`;
                 const categorySummary = hour.topCategories.map(item => `${item.category} (${item.count})`).join(' · ');
@@ -73,6 +183,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (_) {
             insightsStatus.textContent = 'Local insight is unavailable.';
             insightsTrend.textContent = '';
+        }
+    }
+
+    async function refreshLocalDataSummary() {
+        try {
+            const summary = await chrome.runtime.sendMessage({ action: 'getLocalDataSummary' });
+            dataScopeEvents.textContent = summary.localEventCount || 0;
+        } catch (_) {
+            dataScopeEvents.textContent = 'Unavailable';
         }
     }
 
@@ -97,8 +216,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const paused = observationState === 'paused';
         const active = observationState === 'active';
 
-        startBtn.disabled = active;
-        startBtn.style.opacity = active ? '0.5' : '1';
+        startBtn.disabled = active || !productConsentGranted;
+        startBtn.style.opacity = active || !productConsentGranted ? '0.5' : '1';
         pauseBtn.disabled = inactive;
         pauseBtn.style.opacity = inactive ? '0.5' : '1';
         scanBtn.disabled = !active;
@@ -122,6 +241,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
+        lastResultData = data;
         const count = data.count || 0;
         await refreshFeedbackState(data.results);
         updateObservationControls(data.sessionState);
@@ -250,7 +370,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         });
                         li.appendChild(feedbackBtn);
                     }
-                    if (detectionIds.length > 0) {
+                    if (personalProtectionEnabled && detectionIds.length > 0) {
                         const safetyBtn = document.createElement('button');
                         safetyBtn.className = 'safety-btn';
                         const isBlurred = safetyActions.length > 0 && safetyActions.every(action => action === 'blur');
@@ -297,6 +417,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             void updateUI(message);
             refreshLocalHistory();
             refreshLocalInsights();
+            refreshLocalDataSummary();
         }
     });
 
@@ -330,6 +451,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             statusDiv.className = "status";
         }
     });
+
+    await preferencesLoaded;
 
     // Get initial results on popup open
     try {
@@ -381,19 +504,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             const response = await chrome.runtime.sendMessage({ action: 'clearLocalHistory' });
             historyStatus.textContent = response.cleared ? '0 stored' : 'Delete failed';
             refreshLocalInsights();
+            refreshLocalDataSummary();
         } catch (_) {
             historyStatus.textContent = 'Delete failed';
         }
     });
-    // Visual Interference Toggle Handler
-    const toggleVisual = document.getElementById('toggleVisual');
     if (toggleVisual) {
-        // Load saved state
-        chrome.storage.local.get(['visualEnabled'], (result) => {
-            toggleVisual.checked = result.visualEnabled || false;
-        });
-
-        // Save state on change
         toggleVisual.addEventListener('change', async () => {
             const newState = toggleVisual.checked;
             await chrome.storage.local.set({ visualEnabled: newState });
@@ -410,8 +526,86 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    if (toggleProtection) {
+        toggleProtection.addEventListener('change', async () => {
+            personalProtectionEnabled = toggleProtection.checked;
+            await chrome.storage.local.set({ personalProtectionEnabled });
+            if (lastResultData) await updateUI(lastResultData);
+        });
+    }
+
+    if (consentCheckbox) {
+        consentCheckbox.addEventListener('change', async () => {
+            if (!consentCheckbox.checked) return;
+            productConsentGranted = true;
+            await chrome.storage.local.set({ productConsentVersion: '1' });
+            consentPanel.hidden = true;
+            updateObservationControls(observationState);
+            statusDiv.textContent = 'Ready to start local observation';
+            statusDiv.className = 'status scanning';
+        });
+    }
+
+    if (analyzeActiveTabBtn) {
+        analyzeActiveTabBtn.addEventListener('click', () => {
+            if (!productConsentGranted) {
+                statusDiv.textContent = 'Review and accept local observation before using active-tab analysis.';
+                statusDiv.className = 'status warning';
+                return;
+            }
+            activeTabCapturePanel.hidden = false;
+            void showActiveTabModelStatus();
+        });
+    }
+
+    if (cancelActiveTabCaptureBtn) {
+        cancelActiveTabCaptureBtn.addEventListener('click', () => {
+            activeTabCapturePanel.hidden = true;
+            activeTabCaptureStatus.textContent = '';
+        });
+    }
+
+    if (confirmActiveTabCaptureBtn) {
+        confirmActiveTabCaptureBtn.addEventListener('click', async () => {
+            confirmActiveTabCaptureBtn.disabled = true;
+            activeTabCaptureStatus.textContent = 'Capturing and processing locally…';
+            try {
+                let domAnalysisSummary;
+                try {
+                    domAnalysisSummary = await runActiveDomAnalysis();
+                } catch (_) {
+                    domAnalysisSummary = 'Rendered-page rules could not run for this tab.';
+                }
+                const receipt = await globalThis.DarkPatternActiveTabCapture.captureOnce({
+                    getActiveTab: getCurrentTab,
+                    ensureReady: async tab => {
+                        // Screenshot analysis operates on rendered pixels, not the
+                        // page DOM. This keeps one-shot analysis available for an
+                        // image or a PDF rendered in the active tab, where a content
+                        // script may not have a receiver.
+                        if (!tab?.active) return { eligible: false, reason: 'Keep the tab visible before capturing.' };
+                        return { eligible: true };
+                    },
+                    captureVisibleTab: tab => chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' }),
+                    decodeImage: decodeCapturedImage,
+                    analyzeCapture: rawCapture => chrome.runtime.sendMessage({ action: 'analyzeActiveTabImage', rawCapture })
+                });
+                const storedSignalCount = await recordActiveTabSignals(receipt.analysis.signals);
+                activeTabCaptureStatus.textContent = `${domAnalysisSummary} ${summarizeActiveTabAnalysis(receipt, storedSignalCount)}`;
+                await refreshLocalHistory();
+                await refreshLocalInsights();
+                refreshLocalDataSummary();
+            } catch (error) {
+                activeTabCaptureStatus.textContent = error?.message || 'Visible-tab capture could not be completed.';
+            } finally {
+                confirmActiveTabCaptureBtn.disabled = false;
+            }
+        });
+    }
+
     updateObservationControls(observationState);
     await refreshLocalHistory();
     await refreshLocalInsights();
+    await refreshLocalDataSummary();
 
 });

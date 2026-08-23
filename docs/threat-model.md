@@ -5,7 +5,7 @@
 - Raw screenshots, video frames, OCR text, and audio
 - Account names, usernames, URLs, private messages, and contact information
 - Content classifications and inferred interests
-- Wellbeing check-ins and longitudinal insights
+- Longitudinal insights and any future research self-report data
 - Research exports and participant identity mappings
 - Model prompts, local rules, and feedback history
 

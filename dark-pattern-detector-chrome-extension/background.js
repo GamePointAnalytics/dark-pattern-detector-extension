@@ -10,11 +10,16 @@
 
 let offscreenCreating = null;
 const LOCAL_EVENT_STORE_KEY = 'localEventsV1';
+const OBSERVATION_SESSION_STORE_KEY = 'observationSessionsV1';
 const MAX_LOCAL_EVENTS = 2000;
+const MAX_OBSERVATION_SESSIONS = 500;
 let eventWriteChain = Promise.resolve();
 
 chrome.runtime.onInstalled.addListener(() => {
     console.log("[Background] Extension installed.");
+    // Wellbeing check-ins are no longer part of the desktop product. Remove the
+    // retired local-only data instead of leaving inaccessible sensitive records.
+    chrome.storage.local.remove(['wellbeingCheckInsV1', 'wellbeingCheckInsEnabled']);
 });
 
 function sanitizeLocalEvent(event) {
@@ -74,6 +79,52 @@ function appendLocalEvents(events) {
     return eventWriteChain;
 }
 
+async function getLocalDataSummary() {
+    const stored = await chrome.storage.local.get([LOCAL_EVENT_STORE_KEY, OBSERVATION_SESSION_STORE_KEY]);
+    const events = Array.isArray(stored[LOCAL_EVENT_STORE_KEY]) ? stored[LOCAL_EVENT_STORE_KEY] : [];
+    const sessions = Array.isArray(stored[OBSERVATION_SESSION_STORE_KEY]) ? stored[OBSERVATION_SESSION_STORE_KEY] : [];
+    return {
+        localEventCount: events.length,
+        observationSessionCount: sessions.length,
+        rawCaptureCount: 0,
+        rawTextCount: 0,
+        urlCount: 0
+    };
+}
+
+function sanitizeObservationSession(session) {
+    if (!session?.sessionId) return null;
+    return {
+        schemaVersion: '0.1',
+        sessionId: String(session.sessionId),
+        startedAtBucket: String(session.startedAtBucket || new Date().toISOString()),
+        updatedAtBucket: String(session.updatedAtBucket || new Date().toISOString()),
+        activeSeconds: Math.max(0, Math.min(86400, Math.round(Number(session.activeSeconds) || 0))),
+        privacy: {
+            rawCaptureDeleted: true,
+            researchExportEligible: false
+        }
+    };
+}
+
+function upsertObservationSession(session) {
+    const safeSession = sanitizeObservationSession(session);
+    if (!safeSession) return Promise.resolve({ saved: false, error: 'Missing session identifier.' });
+
+    eventWriteChain = eventWriteChain.catch(() => undefined).then(async () => {
+        const stored = await chrome.storage.local.get(OBSERVATION_SESSION_STORE_KEY);
+        const current = Array.isArray(stored[OBSERVATION_SESSION_STORE_KEY]) ? stored[OBSERVATION_SESSION_STORE_KEY] : [];
+        const index = current.findIndex(item => item.sessionId === safeSession.sessionId);
+        const next = index === -1
+            ? current.concat(safeSession).slice(-MAX_OBSERVATION_SESSIONS)
+            : current.map((item, itemIndex) => itemIndex === index ? safeSession : item);
+        await chrome.storage.local.set({ [OBSERVATION_SESSION_STORE_KEY]: next });
+        return { saved: true, count: next.length };
+    });
+
+    return eventWriteChain;
+}
+
 function sanitizeFeedback(feedback) {
     const value = feedback || {};
     return {
@@ -128,8 +179,9 @@ async function getLocalHistorySummary() {
 }
 
 async function getLocalInsights() {
-    const stored = await chrome.storage.local.get(LOCAL_EVENT_STORE_KEY);
+    const stored = await chrome.storage.local.get([LOCAL_EVENT_STORE_KEY, OBSERVATION_SESSION_STORE_KEY]);
     const events = Array.isArray(stored[LOCAL_EVENT_STORE_KEY]) ? stored[LOCAL_EVENT_STORE_KEY] : [];
+    const sessions = Array.isArray(stored[OBSERVATION_SESSION_STORE_KEY]) ? stored[OBSERVATION_SESSION_STORE_KEY] : [];
     const categoryCounts = new Map();
     const sessionIds = new Set();
     const timeBuckets = new Set();
@@ -154,7 +206,8 @@ async function getLocalInsights() {
 
     return {
         eventCount: events.length,
-        sessionCount: sessionIds.size,
+        sessionCount: sessions.length || sessionIds.size,
+        observedSeconds: sessions.reduce((total, session) => total + (Number(session.activeSeconds) || 0), 0),
         timeBucketCount: timeBuckets.size,
         topCategories: [...categoryCounts.entries()]
             .map(([category, count]) => ({ category, count }))
@@ -240,8 +293,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true;
     }
 
+    if (request.action === 'getLocalDataSummary') {
+        getLocalDataSummary()
+            .then(sendResponse)
+            .catch(error => sendResponse({ error: error.message || String(error), localEventCount: 0, rawCaptureCount: 0, rawTextCount: 0, urlCount: 0 }));
+        return true;
+    }
+
+    if (request.action === 'recordObservationSession') {
+        upsertObservationSession(request.session)
+            .then(sendResponse)
+            .catch(error => sendResponse({ saved: false, error: error.message || String(error) }));
+        return true;
+    }
+
     if (request.action === 'clearLocalHistory') {
-        chrome.storage.local.remove(LOCAL_EVENT_STORE_KEY)
+        eventWriteChain = eventWriteChain.catch(() => undefined).then(() => chrome.storage.local.remove([
+            LOCAL_EVENT_STORE_KEY,
+            OBSERVATION_SESSION_STORE_KEY
+        ]));
+        eventWriteChain
             .then(() => sendResponse({ cleared: true, count: 0 }))
             .catch(error => sendResponse({ cleared: false, error: error.message || String(error) }));
         return true;
@@ -251,6 +322,37 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         updateLocalEventFeedback(request.eventIds, request.feedback)
             .then(sendResponse)
             .catch(error => sendResponse({ error: error.message || String(error), updated: 0 }));
+        return true;
+    }
+
+    if (request.action === 'analyzeActiveTabImage') {
+        (async () => {
+            try {
+                await ensureOffscreen();
+                const analysis = await chrome.runtime.sendMessage({
+                    action: 'offscreenAnalyzeVisibleImage',
+                    rawCapture: request.rawCapture
+                });
+                sendResponse(analysis || { status: 'unavailable', signals: [] });
+            } catch (error) {
+                console.warn('[Background] local image analysis unavailable:', error?.message || error);
+                sendResponse({ status: 'failed', signals: [] });
+            }
+        })();
+        return true;
+    }
+
+    if (request.action === 'getActiveTabImageAnalysisStatus') {
+        (async () => {
+            try {
+                await ensureOffscreen();
+                const status = await chrome.runtime.sendMessage({ action: 'offscreenGetImageAnalysisStatus' });
+                sendResponse(status || { availability: 'unavailable' });
+            } catch (error) {
+                console.warn('[Background] local image-analysis status unavailable:', error?.message || error);
+                sendResponse({ availability: 'unavailable' });
+            }
+        })();
         return true;
     }
 

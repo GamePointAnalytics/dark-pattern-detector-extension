@@ -31,6 +31,8 @@ A person explicitly requests analysis of the content currently visible in the ac
 - Shows the person what categories were detected, the confidence, and the available safety actions.
 - Does not upload the capture, OCR text, URL, or account identity in normal product mode.
 
+Current beta: one visible-tab capture is available only after an in-popup second confirmation. The beta validates local capture and disposal only; no OCR or image classifier is installed yet, so no image-derived signal is retained.
+
 ### Mode 3 — Consented research session (backlog)
 
 A separately enabled study mode for an approved research protocol. It may use a visible, time-bounded tab-video stream to derive exposure and interaction metrics.

@@ -14,7 +14,7 @@ Success means the person can make an informed choice without the product taking 
 
 Purpose: help a person recognize patterns in their own exposure and usage.
 
-Outputs include platform/time summaries, content-category trends, repeated exposure patterns, and optional mood or wellbeing check-ins.
+Outputs include platform/time summaries, content-category trends, and repeated exposure patterns.
 
 Insights describe associations and observations. They do not diagnose a person, declare content harmful with certainty, or claim causation.
 

@@ -309,6 +309,60 @@
     button.safety-btn:hover {
       box-shadow: none;
     }
+
+    .consent-panel {
+      margin: 0 0 12px;
+      padding: 10px;
+      border-radius: 8px;
+      background: #eef4ff;
+      color: #33456d;
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .consent-panel p {
+      margin: 0 0 7px;
+    }
+
+    .consent-panel label {
+      display: flex;
+      gap: 6px;
+      align-items: flex-start;
+      cursor: pointer;
+    }
+
+    details.data-scope {
+      margin: 8px 0;
+      padding: 7px 0;
+      border-top: 1px solid #eee;
+      border-bottom: 1px solid #eee;
+      font-size: 11px;
+      color: #555;
+    }
+
+    details.data-scope summary {
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .data-scope-list {
+      margin: 7px 0 0;
+      padding-left: 16px;
+    }
+
+    .capture-panel {
+      margin: 0 0 12px;
+      padding: 10px;
+      border-radius: 8px;
+      background: #fff8e8;
+      color: #6a4b12;
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .capture-panel p {
+      margin: 0 0 8px;
+    }
   </style>
 </head>
 
@@ -319,22 +373,52 @@
     <div class="toggle-row">
       <span class="toggle-label">Visual Interference (Beta)</span>
       <label class="toggle">
-        <input type="checkbox" id="toggleVisual">
+        <input type="checkbox" id="toggleVisual" aria-label="Enable visual interference detection">
         <span class="slider"></span>
       </label>
+    </div>
+
+    <div class="toggle-row">
+      <span class="toggle-label">Personal protection actions</span>
+      <label class="toggle">
+        <input type="checkbox" id="toggleProtection" aria-label="Enable optional personal protection actions">
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div id="consentPanel" class="consent-panel">
+      <p><strong>Before observation starts</strong>: this extension scans supported page text locally for possible content signals. It stores minimized signals and your optional feedback on this device.</p>
+      <p>It does not capture screenshots, video, audio, URLs, account names, or raw page text in this mode. You can Pause and Delete Local History at any time.</p>
+      <label><input type="checkbox" id="consentCheckbox"> <span>I understand and want to enable local browser observation.</span></label>
     </div>
 
     <div id="status" class="status" role="status" aria-live="polite">Scanning...</div>
 
     <button id="startBtn">Start Observation</button>
     <button id="scanBtn" style="margin-top: 8px;">Scan Current Page</button>
+    <button id="analyzeActiveTabBtn" style="margin-top: 8px; background: #4a6fdc;">Analyze Visible Content (Beta)</button>
     <button id="pauseBtn" style="margin-top: 8px; background: #f0f0f0; color: #333;">Pause Detection</button>
     <button id="deleteHistoryBtn" style="margin-top: 8px; background: #fff3e0; color: #7a4500;">Delete Local History</button>
+
+    <div id="activeTabCapturePanel" class="capture-panel" hidden>
+      <p><strong>One-time visible-tab capture</strong>: this captures only the currently visible browser tab after you confirm below. It can analyze a rendered web page, image, or PDF. The image is processed in memory and immediately discarded; it is not uploaded or stored.</p>
+      <p>On supported pages, this first runs the extension's local text and visual rules and shows those findings immediately. When Chrome's optional on-device image model is available, it also saves only supported image-category labels and confidence. It never saves the image, a caption, OCR text, URLs, or account names. If the model is unavailable, capture still ends with deletion and no image signal.</p>
+      <button id="confirmActiveTabCaptureBtn" style="background: #a46700;">Capture Visible Content Once</button>
+      <button id="cancelActiveTabCaptureBtn" style="margin-top: 6px; background: #f0f0f0; color: #333;">Cancel</button>
+      <p id="activeTabCaptureStatus" role="status" aria-live="polite"></p>
+    </div>
 
     <div class="stats">
       <div id="patternsList"></div>
       <div id="insightsStatus" class="insights-note" role="status" aria-live="polite">Loading local summary…</div>
       <div id="insightsTrend" class="insights-trend"></div>
+      <details class="data-scope">
+        <summary>What is stored locally?</summary>
+        <ul class="data-scope-list">
+          <li><span id="dataScopeEvents">0</span> minimized detection events</li>
+          <li>No raw captures, raw page text, URLs, or account names</li>
+        </ul>
+      </details>
       <div class="stats-row" style="margin-top: 12px; border-top: 1px solid #eee; padding-top: 8px;">
         <span>Total Detected:</span>
         <span id="patternCount">0</span>
@@ -350,6 +434,8 @@
     </div>
   </div>
 
+  <script src="image-signal-core.js"></script>
+  <script src="active-tab-capture.js"></script>
   <script src="popup.js"></script>
 </body>
 

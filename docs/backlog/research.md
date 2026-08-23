@@ -19,3 +19,7 @@ Research is a future product frame and must remain disabled until the study prot
 - De-identification and re-identification risk assessment
 - Separate research-export consent and revocation flow
 - Pilot protocol with predefined quality and stopping criteria
+
+## Deferred self-report instrument
+
+If a study needs self-reported mood, stress, sleep, or wellbeing, design it as a study-specific instrument after protocol and ethics review. It is not a desktop-product feature and must not be inferred from browsing data.

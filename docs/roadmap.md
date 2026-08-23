@@ -18,7 +18,7 @@
 ## Phase 1A — Capture controls and consent
 
 - Implement Browser Observation start/pause and Delete Local History controls.
-- Implement the product consent gate and inspectable local data view.
+- [x] Implement the product consent gate and inspectable local data view.
 - Keep all screenshot and video permissions absent.
 
 ## Product operating modes and priority
@@ -32,10 +32,11 @@ This ordering protects the core question: what patterns are observed in content 
 ## Phase 1B — Measurement and local insights (current priority)
 
 - [x] Aggregate local signals by category, session, and recorded hour.
+- [x] Track local visibility-aware observation time in minimized session summaries.
 - [x] Explain the observation window, local-only scope, and deletion control.
 - [x] Add a short recent-hours category trend without displaying raw content.
-- [ ] Define an optional, separately consented wellbeing check-in model; do not infer mental state from browsing data.
-- [ ] Define a research-ready observational baseline where protective actions are disabled or measured separately.
+- [x] Keep self-reported wellbeing out of the desktop MVP; reserve it for separately approved research design.
+- [x] Define an observation-only default where personal-protection actions are opt-in and can be measured separately.
 
 ## Tomorrow — focused implementation checklist
 
@@ -87,18 +88,21 @@ The goal for the next work session is to strengthen the existing browser MVP bef
 
 ## Phase 2 — User-controlled content servings
 
-- Add a user-triggered “Analyze this content” action.
-- Process a bounded screenshot locally when DOM text is insufficient.
-- Add local OCR and image classification behind a capability interface.
-- Delete raw capture and OCR output after analysis.
-- Show exactly what was analyzed and what was retained.
+- [x] Add a two-step, user-triggered “Analyze visible content” action using activeTab.
+- [x] Process one bounded visible-tab screenshot locally and discard it after a capture receipt is derived.
+- [x] Process a bounded screenshot locally when DOM text is insufficient.
+- [x] Add local image classification behind a capability interface; defer OCR until it has a specific validated use case.
+- [x] Delete raw capture and any model prose after analysis.
+- [x] Show exactly what was analyzed and what was retained.
 
 ## Phase 2A — Active-tab analysis
 
-- Add the person-triggered Analyze this content flow.
-- Request active-tab capture only at the point of use.
-- Process the capture locally and delete raw media after analysis.
-- Show a visible capture state and result explanation.
+- [x] Add the person-triggered Analyze this content flow.
+- [x] Request active-tab capture only at the point of use.
+- [x] Process the capture locally and delete raw media after analysis.
+- [x] Show a visible capture state and result explanation.
+- [x] Show local image-model readiness before a person chooses to capture.
+- [ ] Select and approve a secure remote-analysis boundary before implementing any remote screenshot inference.
 
 ## Phase 3 — Optional personal-protection actions and quality
 

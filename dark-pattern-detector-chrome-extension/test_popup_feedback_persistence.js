@@ -37,8 +37,8 @@ function descendants(element) {
     return element.children.flatMap(child => [child, ...descendants(child)]);
 }
 
-function createPopup(feedbackById) {
-    const ids = ['scanBtn', 'startBtn', 'pauseBtn', 'deleteHistoryBtn', 'status', 'patternCount', 'historyStatus', 'insightsStatus', 'insightsTrend', 'patternsList', 'modeBadge', 'toggleVisual'];
+function createPopup(feedbackById, personalProtectionEnabled = false, productConsentGranted = false) {
+    const ids = ['scanBtn', 'startBtn', 'pauseBtn', 'deleteHistoryBtn', 'status', 'patternCount', 'historyStatus', 'insightsStatus', 'insightsTrend', 'patternsList', 'modeBadge', 'toggleVisual', 'toggleProtection', 'consentPanel', 'consentCheckbox', 'dataScopeEvents'];
     const elements = Object.fromEntries(ids.map(id => [id, new Element(id)]));
     const domListeners = {};
     const tabMessages = [];
@@ -56,7 +56,7 @@ function createPopup(feedbackById) {
                     return {
                         count: 1,
                         hasScanned: true,
-                        sessionState: 'active',
+                        sessionState: 'inactive',
                         mode: 'Regex only',
                         results: [{
                             detectionId: 'detection-1',
@@ -70,7 +70,7 @@ function createPopup(feedbackById) {
                 return { sessionState: 'active' };
             }
         },
-        storage: { local: { get: (_, callback) => callback({ visualEnabled: false }), set: async () => {} } },
+        storage: { local: { get: (_, callback) => callback({ visualEnabled: false, personalProtectionEnabled, productConsentVersion: productConsentGranted ? '1' : undefined }), set: async () => {} } },
         runtime: {
             onMessage: { addListener: () => {} },
             sendMessage: async request => {
@@ -80,10 +80,12 @@ function createPopup(feedbackById) {
                         eventCount: 1,
                         sessionCount: 1,
                         timeBucketCount: 1,
+                        observedSeconds: 125,
                         topCategories: [{ category: 'Urgency', count: 1 }],
                         recentHours: [{ bucket: '2026-08-22T12:00:00.000Z', count: 1, topCategories: [{ category: 'Urgency', count: 1 }] }]
                     };
                 }
+                if (request.action === 'getLocalDataSummary') return { localEventCount: 1 };
                 if (request.action === 'updateLocalEventFeedback') {
                     request.eventIds.forEach(id => feedbackById.set(id, 'not_relevant'));
                     return { updated: request.eventIds.length };
@@ -107,6 +109,10 @@ function createPopup(feedbackById) {
         safetyButton() { return descendants(elements.patternsList).find(el => el.className === 'safety-btn'); },
         explanationText() { return descendants(elements.patternsList).find(el => el.className === 'pattern-explanation')?.textContent; },
         tabMessages,
+        consentPanel() { return elements.consentPanel; },
+        consentCheckbox() { return elements.consentCheckbox; },
+        startButton() { return elements.startBtn; },
+        localEventCount() { return elements.dataScopeEvents.textContent; },
         insightsText() { return elements.insightsStatus.textContent; },
         insightsTrendText() { return elements.insightsTrend.textContent; }
     };
@@ -116,12 +122,22 @@ function createPopup(feedbackById) {
     const feedbackById = new Map();
     const firstPopup = createPopup(feedbackById);
     await firstPopup.open();
-    assert.match(firstPopup.insightsText(), /Local summary: 1 signals across 1 session — Urgency \(1\)\. Observation window: 1 recorded hour\. Stored on this device; Delete Local History removes it\./);
+    assert.match(firstPopup.insightsText(), /Local summary: 1 signals across 1 session — Urgency \(1\)\. Observation window: 1 recorded hour; 2 minutes observed\. Stored on this device; Delete Local History removes it\./);
     assert.equal(firstPopup.insightsTrendText(), 'Recent recorded hours: Latest: 1 signal — Urgency (1).');
     assert.equal(firstPopup.explanationText(), 'Matched a configured local text rule. Review and correct it if it does not fit this page.');
-    assert.equal(firstPopup.safetyButton().textContent, 'Blur', 'a detection should offer a reversible blur action');
-    await firstPopup.safetyButton().trigger('click');
-    assert.deepEqual(firstPopup.tabMessages.at(-1), {
+    assert.equal(firstPopup.safetyButton(), undefined, 'observation-only mode must not present a protection action');
+    assert.equal(firstPopup.consentPanel().hidden, false, 'browser observation must show its local-data acknowledgement before first use');
+    assert.equal(firstPopup.startButton().disabled, true, 'Start Observation must remain locked until acknowledgement');
+    firstPopup.consentCheckbox().checked = true;
+    await firstPopup.consentCheckbox().trigger('change');
+    assert.equal(firstPopup.consentPanel().hidden, true, 'acknowledgement should be dismissed only after explicit confirmation');
+    assert.equal(firstPopup.startButton().disabled, false, 'Start Observation should unlock after acknowledgement');
+    assert.equal(firstPopup.localEventCount(), 1, 'local data view should expose minimized event counts');
+    const protectionPopup = createPopup(feedbackById, true);
+    await protectionPopup.open();
+    assert.equal(protectionPopup.safetyButton().textContent, 'Blur', 'an opted-in person can use a reversible blur action');
+    await protectionPopup.safetyButton().trigger('click');
+    assert.deepEqual(protectionPopup.tabMessages.at(-1), {
         action: 'applySafetyAction',
         eventIds: ['detection-1'],
         safetyAction: 'blur'

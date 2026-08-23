@@ -28,6 +28,9 @@ let visualEnabled = false;
 let observationActive = false;
 let sessionId = null;
 let observer = null;
+let sessionStartedAtBucket = null;
+let activeSince = null;
+let observedSeconds = 0;
 
 // --- Optional AI (Gemini Nano) state ---
 // nanoStatus: 'unknown' | 'available' | 'unavailable'
@@ -52,6 +55,37 @@ function currentHourBucket() {
 function getObservationState() {
     if (!observationActive) return 'inactive';
     return isPaused ? 'paused' : 'active';
+}
+
+function resumeObservationClock() {
+    if (observationActive && !isPaused && document.visibilityState === 'visible' && activeSince === null) {
+        activeSince = Date.now();
+    }
+}
+
+function pauseObservationClock() {
+    if (activeSince !== null) {
+        observedSeconds += Math.max(0, Math.round((Date.now() - activeSince) / 1000));
+        activeSince = null;
+    }
+}
+
+function currentObservedSeconds() {
+    if (activeSince === null) return observedSeconds;
+    return observedSeconds + Math.max(0, Math.round((Date.now() - activeSince) / 1000));
+}
+
+function persistObservationSession() {
+    if (!sessionId || !sessionStartedAtBucket) return Promise.resolve();
+    return chrome.runtime.sendMessage({
+        action: 'recordObservationSession',
+        session: {
+            sessionId,
+            startedAtBucket: sessionStartedAtBucket,
+            updatedAtBucket: currentHourBucket(),
+            activeSeconds: currentObservedSeconds()
+        }
+    }).catch(error => console.debug('[DarkPatternDetector] Could not record observation session:', error));
 }
 
 function detectionMetadata(detector) {
@@ -510,6 +544,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         observationActive = true;
         isPaused = false;
         sessionId = sessionId || createId('session');
+        sessionStartedAtBucket = sessionStartedAtBucket || currentHourBucket();
+        resumeObservationClock();
         chrome.storage.local.set({ isPaused: false });
         ensureObserver();
         scanAndHighlight(document.body, false);
@@ -525,14 +561,34 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return false;
     } else if (request.action === "getResults") {
         sendResponse(getResults());
+    } else if (request.action === "analyzeVisibleDom") {
+        // A person explicitly requested one active-tab analysis. This is distinct
+        // from ongoing observation: it runs the local deterministic rules once,
+        // does not start the observer or session clock, and retains only the same
+        // minimized events as a normal local scan.
+        patternsLoadedPromise
+            .then(() => scanAndHighlight(document.body, false))
+            .then(() => sendResponse({ ...getResults(), analysisSource: 'local_dom' }))
+            .catch(error => sendResponse({ error: error?.message || String(error), analysisSource: 'local_dom' }));
+        return true;
+    } else if (request.action === "getCaptureReadiness") {
+        sendResponse({
+            eligible: document.visibilityState === 'visible',
+            reason: document.visibilityState === 'visible' ? undefined : 'The active tab is not visible.'
+        });
     } else if (request.action === "applySafetyAction") {
         sendResponse(applySafetyAction(request.eventIds, request.safetyAction));
     } else if (request.action === "togglePause") {
         isPaused = request.isPaused;
         observationActive = true;
         chrome.storage.local.set({ isPaused });
-        if (!isPaused) {
+        if (isPaused) {
+            pauseObservationClock();
+            persistObservationSession();
+        } else {
             sessionId = sessionId || createId('session');
+            sessionStartedAtBucket = sessionStartedAtBucket || currentHourBucket();
+            resumeObservationClock();
             ensureObserver();
             scanAndHighlight(document.body, false);
         }
@@ -597,6 +653,20 @@ Promise.all([
 
     console.log(`[DarkPatternDetector] Initialized. Visual: ${visualEnabled}, Observation: ${getObservationState()}`);
 
+});
+
+document.addEventListener('visibilitychange', () => {
+    if (!observationActive || isPaused) return;
+    if (document.visibilityState === 'visible') resumeObservationClock();
+    else {
+        pauseObservationClock();
+        persistObservationSession();
+    }
+});
+
+window.addEventListener('pagehide', () => {
+    pauseObservationClock();
+    persistObservationSession();
 });
 
 /**
